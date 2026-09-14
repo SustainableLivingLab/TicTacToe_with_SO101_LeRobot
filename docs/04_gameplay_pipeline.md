@@ -56,9 +56,6 @@ skips the human-wait (see `03_dataset_and_training.md`, "Turn assignment").
 - `TicTacToe_with_SO101/src/lerobot/scripts/ticTacToe/image_transformation_testing.py`:
   standalone script for testing/recalibrating the camera crop and
   perspective-warp pipeline, without running the full game loop.
-- `TicTacToe_with_SO101/src/lerobot/scripts/ticTacToe/TicTacToeAlgorithm.py`:
-  stale duplicate of the minimax logic now living in `play_TicTacToe.py`. See
-  `05_known_issues.md`.
 - `TicTacToe_with_SO101/src/lerobot/record.py`,
   `TicTacToe_with_SO101/src/lerobot/scripts/train.py`: stock upstream
   LeRobot CLI entry points used for data collection and training.

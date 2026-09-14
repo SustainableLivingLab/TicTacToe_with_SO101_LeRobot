@@ -1,20 +1,25 @@
 # 05. Known Issues
 
+## Fixed
+
+- Duplicate import of `hw_to_dataset_features` and `make_robot_from_config`
+  in `play_TicTacToe.py`. Removed the redundant `lerobot.record` import;
+  both are now imported once each.
+- Unguarded regex match in `call_policy()`. `matches[-1]` on
+  `re.findall(r'Place at position \d+', instruction, re.IGNORECASE)` now
+  raises a clear `ValueError` instead of an opaque `IndexError` if the
+  instruction string does not contain that pattern.
+- `TicTacToe_with_SO101/src/lerobot/scripts/ticTacToe/TicTacToeAlgorithm.py`,
+  a stale duplicate of the `analyzeboard`/`minimax`/`CompTurn`/`print_board`
+  logic in `play_TicTacToe.py`, has been deleted.
+- Missing null-check on `get_grid_image()`'s return value. `play()` now
+  checks for a failed camera read and retries the loop instead of crashing
+  in `crop_image`/`get_LLM_output`.
+- Hardcoded Gemini API key. Moved to the `GEMINI_API_KEY` environment
+  variable, read from a gitignored `.env` file (see `02_software_setup.md`).
+
 ## Code issues
 
-- **Duplicate import** of `hw_to_dataset_features` in `play_TicTacToe.py`
-  (once from `lerobot.record`, once from `lerobot.datasets.utils`). Second
-  shadows the first. Harmless, but should be cleaned up.
-- **Unguarded regex match** in `call_policy()`: `matches[-1]` on
-  `re.findall(r'Place at position \d+', instruction, re.IGNORECASE)` raises
-  `IndexError` if the instruction string does not contain that pattern.
-- **`TicTacToe_with_SO101/src/lerobot/scripts/ticTacToe/TicTacToeAlgorithm.py`**
-  is a stale duplicate of the `analyzeboard`/`minimax`/`CompTurn`/`print_board`
-  logic now living in `play_TicTacToe.py`, including leftover debug
-  `print()` calls inside `minimax`. Candidate for deletion.
-- **No null-check** on `get_grid_image()`'s return value. If the camera read
-  fails (`ret == False`), `image` is `None` and the next call
-  (`crop_image`/`get_LLM_output`) crashes instead of failing gracefully.
 - **Color/token naming inconsistency.** `play_TicTacToe.py` (runtime, Gemini
   prompt and parser) uses Black/Brown. `board_generator.py`'s `print_board`
   prints the same pieces as B/W ("White"), while internally still using X/O.

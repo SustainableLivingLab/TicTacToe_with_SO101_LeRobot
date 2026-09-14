@@ -8,10 +8,6 @@ from google import genai
 from google.genai import types
 from pathlib import Path
 from dataclasses import dataclass
-from lerobot.record import (
-    make_robot_from_config,
-    hw_to_dataset_features
-    )
 from lerobot.datasets.utils import (
     build_dataset_frame,
     hw_to_dataset_features,
@@ -131,6 +127,10 @@ def call_policy(cfg: TicTacToeConfig, instruction: str):
         policy = make_policy(cfg.policy, ds_meta=cfg.metadata)
 
         matches = re.findall(r'Place at position \d+', instruction, re.IGNORECASE)
+        if not matches:
+            raise ValueError(
+                f"Instruction {instruction!r} does not contain a 'Place at position N' directive."
+            )
         instruction = matches[-1]
 
         if policy is not None:
@@ -458,6 +458,10 @@ def play(cfg: TicTacToeConfig) -> None:
 
         camera_index = 2
         image = get_grid_image(camera_index = camera_index)
+        if image is None:
+            print("Camera capture failed, retrying.")
+            log_say("Camera capture failed", cfg.play_sounds)
+            continue
         image = crop_image(image, left_pct = 0.25, right_pct = 0.61 , top_pct = 0.82, bottom_pct = 1.0)
         four_points = [(9, 76), (214, 79), (205, 7), (59, 7)]
         image=transform_to_top_view(image, four_points, output_size=[400,400])
