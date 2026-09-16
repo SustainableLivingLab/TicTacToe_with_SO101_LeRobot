@@ -120,3 +120,36 @@ make color task-relevant, which should increase reliance on vision.
 Result videos referenced in the original write-up are not stored in this
 repository (see `05_known_issues.md` for the state of
 `output/attention_analysis_results/`).
+
+## Known limitation: this dataset is not environment-agnostic
+
+The 90-episode dataset (9 cells x 10 demos, `board_generator.py`'s scenarios)
+varies board occupancy, which cell has a piece and where, but does not vary
+anything about the physical recording environment itself: camera position,
+lighting, table background, or board placement are held fixed across every
+episode.
+
+This is a deliberate tradeoff, not an oversight. Varying board occupancy
+stresses the model's task-conditioning pathway (learning to distinguish
+"place at cell 5" from "place at cell 3"), but does not stress its visual
+grounding. Since the target-cell signal is carried entirely by the task
+instruction token (see `06_act_configuration.md`), and the camera view of
+each cell's physical location never changes, the model has no training
+pressure to use vision to locate the cell. It can succeed by learning a
+near-fixed joint trajectory per task token instead, which is consistent with
+the low vision-attention finding above.
+
+Practical consequence: this policy is expected to work reliably only with
+the camera, table, and board in the same physical position and lighting
+used during recording. Moving the camera, changing lighting, or relocating
+the board is likely to degrade performance, since the model was never
+required to compensate for such changes visually. See
+`01_hardware_setup.md` for how tightly the camera pipeline is calibrated to
+one fixed setup.
+
+A dataset that produced a genuinely environment-agnostic policy would need
+to vary the nuisance factors (camera pose, lighting, board position,
+background) across episodes while keeping the task-relevant signal (where
+each cell actually is, relative to the camera) the thing the model has to
+learn to track visually. That is a larger, separate recording effort and is
+out of scope for the current 90-episode dataset.

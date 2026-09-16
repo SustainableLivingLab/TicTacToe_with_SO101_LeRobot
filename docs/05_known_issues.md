@@ -35,6 +35,12 @@
 - `board_generator.py` silently skips a scenario if it cannot find a valid
   board configuration within 1000 attempts, instead of retrying with relaxed
   constraints. See `03_dataset_and_training.md`.
+- The dataset is not environment-agnostic. Camera position, lighting, table
+  background, and board placement are fixed across all 90 episodes, so the
+  trained policy is only expected to work reliably in that same physical
+  setup. This is a deliberate scope decision for the current dataset, not a
+  bug. See `03_dataset_and_training.md`, "Known limitation: this dataset is
+  not environment-agnostic," for what a future dataset would need to change.
 
 ## Repository state
 
