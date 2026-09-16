@@ -3,13 +3,13 @@
 A robot arm (SO-101) that plays Tic-Tac-Toe against a human, built on a
 fork of [LeRobot](https://github.com/huggingface/lerobot).
 
-Human plays X (Black), always moves first. Robot plays O (Brown), always
+Human plays X (Blue), always moves first. Robot plays O (Red), always
 moves second, hardcoded.
 
 ## Pipeline
 
 1. Camera captures the board, image is perspective-warped to a top-down view.
-2. Gemini reads the state of each of the 9 cells (Empty/Brown/Black).
+2. Gemini reads the state of each of the 9 cells (Empty/Red/Blue).
    Perception only, no move reasoning.
 3. A local minimax search picks the robot's move. Plain game-tree search, not
    a learned model.

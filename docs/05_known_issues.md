@@ -17,15 +17,13 @@
   in `crop_image`/`get_LLM_output`.
 - Hardcoded Gemini API key. Moved to the `GEMINI_API_KEY` environment
   variable, read from a gitignored `.env` file (see `02_software_setup.md`).
-
-## Code issues
-
-- **Color/token naming inconsistency.** `play_TicTacToe.py` (runtime, Gemini
-  prompt and parser) uses Black/Brown. `board_generator.py`'s `print_board`
-  prints the same pieces as B/W ("White"), while internally still using X/O.
-  Functionally consistent, the labels just differ between files. Standardize
-  on Black/Brown in any new code, it matches the physical carrom coins and
-  the Gemini prompt.
+- Color/token naming inconsistency between `play_TicTacToe.py` and
+  `board_generator.py`. Both now consistently use Blue/Red, matching the
+  physical wooden tile set (see `01_hardware_setup.md`). Previously the
+  board used Black/Brown carrom coins; if the physical set changes again,
+  update the Gemini prompt and parser in `play_TicTacToe.py` and
+  `image_transformation_testing.py`, plus `print_board`'s symbol map and
+  `board_to_description()` in `board_generator.py`.
 
 ## Design limitations
 

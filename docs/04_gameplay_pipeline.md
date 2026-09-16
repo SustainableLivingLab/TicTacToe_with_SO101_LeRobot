@@ -17,10 +17,10 @@ Source: `TicTacToe_with_SO101/src/lerobot/play_TicTacToe.py`.
    position; see `01_hardware_setup.md`.
 3. **Perceive.** `get_LLM_output()` sends the rectified image to Gemini
    (`gemini-2.0-flash`) with a fixed prompt asking for the state of each of
-   the 9 cells (`Empty`/`Brown`/`Black`). This step is perception only, it
+   the 9 cells (`Empty`/`Red`/`Blue`). This step is perception only, it
    does not choose a move.
 4. **Parse.** `parse_board_state()` converts Gemini's text response into a
-   9-element vector: `-1` for Black/X, `1` for Brown/O, `0` for empty.
+   9-element vector: `-1` for Blue/X, `1` for Red/O, `0` for empty.
 5. **Decide.** `CompTurn()` runs `minimax()` locally, a plain game-tree
    search with no learned model, to find the robot's optimal cell.
    `analyzeboard()` checks for a completed win/draw before this step; if the

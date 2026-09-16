@@ -4,7 +4,7 @@
 
 The robot is hardcoded to always play O and always move second. Evidence:
 `CompTurn()` in `play_TicTacToe.py` always assigns the robot's candidate move
-as `board[i] = 1`, and `parse_board_state()` maps `brown -> 1`, `black -> -1`.
+as `board[i] = 1`, and `parse_board_state()` maps `red -> 1`, `blue -> -1`.
 The robot's role is not a parameter, it is baked into the algorithm. Making
 the robot able to play either color would require passing a `robot_player`
 argument through `CompTurn`/`minimax`, plus matching training demonstrations
@@ -19,7 +19,7 @@ for a first human move on its own.
 ## Dataset structure
 
 90 training episodes total: 9 target grid cells times 10 demonstrations per
-cell. Each episode is a single pick-and-place: one Brown/O coin picked up and
+cell. Each episode is a single pick-and-place: one Red/O tile picked up and
 placed at one target cell. The dataset does not contain multi-move games,
 only isolated single-placement demonstrations.
 
@@ -70,8 +70,9 @@ constraint is harder to satisfy.
 
 ## Physical tokens used in recording
 
-Black and white/brown carrom coins, matching the color scheme read by the
-Gemini vision prompt at inference time (`Black` = X, `Brown` = O).
+Wooden tile pieces slotted into a fixed 3x3 frame, matching the color
+scheme read by the Gemini vision prompt at inference time (`Blue` = X,
+`Red` = O).
 
 ## Policy: Action Chunking Transformer (ACT)
 
@@ -110,7 +111,7 @@ policy attends almost entirely to task instruction and joint state, and
 barely to vision.
 
 This follows directly from the dataset design: the robot's token color
-(Brown/O) never varies across any of the 90 episodes. Only cell position and
+(Red/O) never varies across any of the 90 episodes. Only cell position and
 background clutter vary. Since color carries no information relevant to the
 task, the model has no incentive to look at the image to distinguish
 anything. A future dataset that trains the robot to place either color would

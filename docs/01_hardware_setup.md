@@ -35,7 +35,7 @@ Both arms use 6x STS3215 servos, one per joint.
 The leader uses lower gear ratios on most joints so it can be moved by hand
 without much resistance. The follower uses the higher 1/345 ratio throughout
 for the torque needed to carry real loads (in this project: picking up a
-carrom coin).
+wooden tile piece).
 
 ## Assembly
 
@@ -142,8 +142,8 @@ running the full game loop.
 
 Standard retail tic-tac-toe sets ship 5 X pieces and 5 O pieces (10 total,
 symmetric so the set works regardless of who goes first). This project uses
-black and white/brown carrom coins as the physical tokens: Black = X (human),
-Brown = O (robot).
+a wooden tile set: square tiles that slot into a fixed 3x3 frame, each
+pre-painted with either an X or an O. Blue = X (human), Red = O (robot).
 
 Maximum board occupancy used anywhere in this project's dataset or gameplay
 logic is 4 X + 4 O (one move before a full board), so the 5th O piece from a

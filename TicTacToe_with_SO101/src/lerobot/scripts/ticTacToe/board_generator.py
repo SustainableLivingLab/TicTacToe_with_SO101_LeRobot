@@ -121,7 +121,7 @@ class TicTacToeGenerator:
     
     def print_board(self, board: List[Optional[str]]) -> None:
         """Print board in a readable format."""
-        symbols = {'X': 'B', 'O': 'W', None: '.'}
+        symbols = {'X': 'BLU', 'O': 'RED', None: '.'}
         for i in range(3):
             row = ' '.join(symbols[board[i*3 + j]] for j in range(3))
             print(row)
@@ -135,7 +135,7 @@ class TicTacToeGenerator:
         if x_count == 0 and o_count == 0:
             return "Empty board"
         
-        return f"{x_count} B's, {o_count} W's"
+        return f"{x_count} Blue, {o_count} Red"
 
 # Example usage
 if __name__ == "__main__":

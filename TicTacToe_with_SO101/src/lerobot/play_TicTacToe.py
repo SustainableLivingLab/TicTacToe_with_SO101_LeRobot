@@ -317,10 +317,10 @@ def get_LLM_output(image: Image.Image) -> str:
       
             Mention the state of the board in the following format:
 
-            Position 1: Empty/Brown/Black
-            Position 2: Empty/Brown/Black
+            Position 1: Empty/Red/Blue
+            Position 2: Empty/Red/Blue
             And so on
-            
+
             """
 
     response = process_images_with_LLM(image, prompt)
@@ -338,14 +338,14 @@ def parse_board_state(board_string):
         board_string (str): String containing position information
         
     Returns:
-        list: Vector where -1 = Black, 1 = Brown, 0 = Empty
+        list: Vector where -1 = Blue, 1 = Red, 0 = Empty
     """
     # Initialize vector with zeros
     vector = [0] * 9
-    
+
     # Split the string into lines and process each line
     lines = board_string.strip().split('\n')
-    
+
     for line in lines:
         line = line.strip()
         if line.startswith('Position'):
@@ -354,21 +354,21 @@ def parse_board_state(board_string):
             if len(parts) == 2:
                 position_part = parts[0].strip()
                 state_part = parts[1].strip()
-                
+
                 # Extract position number
                 position_num = int(position_part.split()[-1])
-                
+
                 # Convert to 0-indexed
                 index = position_num - 1
-                
+
                 # Set value based on state
-                if state_part.lower() == 'black':
+                if state_part.lower() == 'blue':
                     vector[index] = -1
-                elif state_part.lower() == 'brown':
+                elif state_part.lower() == 'red':
                     vector[index] = 1
                 elif state_part.lower() == 'empty':
                     vector[index] = 0
-    
+
     return vector
 
 def analyzeboard(board):
