@@ -44,28 +44,11 @@ Note: the script reads `os.environ` directly and does not auto-load `.env`
 files. Export the variable into your shell before running, or use your
 IDE/run configuration's env-file support.
 
-## Running the game
+## Running the game, recording, and training
 
-```bash
-python -m lerobot.play_TicTacToe \
-    --robot.type=so101_follower \
-    --robot.port=<follower port> \
-    --robot.id=<follower id> \
-    --policy.path=<path to trained ACT checkpoint>
-```
-
-See `04_gameplay_pipeline.md` for what this actually runs.
-
-## Recording a new dataset
-
-Data collection uses LeRobot's standard `lerobot-record` CLI, unmodified.
-There is no project-specific wrapper script. The board-state planner
-(`TicTacToe_with_SO101/src/lerobot/scripts/ticTacToe/board_generator.py`)
-decides what background pieces to place before each recorded episode; see
-`03_dataset_and_training.md` for the scenarios it generates.
-
-## Training the policy
-
-Training uses LeRobot's standard `lerobot-train` CLI, unmodified, against a
-recorded dataset. See `03_dataset_and_training.md` for the parameters used
-for the current checkpoint.
+Full command reference (hardware bring-up, recording, training, inference)
+is in `07_command_reference.md`. Data collection and training both use
+LeRobot's standard `python -m lerobot.record` / `python -m lerobot.scripts.train`
+modules, unmodified aside from the `act_lang` policy type (see
+`06_act_configuration.md`). There is no project-specific wrapper script for
+either step.

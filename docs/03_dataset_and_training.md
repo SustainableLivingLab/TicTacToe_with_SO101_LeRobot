@@ -23,9 +23,10 @@ cell. Each episode is a single pick-and-place: one Brown/O coin picked up and
 placed at one target cell. The dataset does not contain multi-move games,
 only isolated single-placement demonstrations.
 
-Recording used LeRobot's standard `lerobot-record` CLI (teleoperation via the
-leader arm). There is no committed project script that drives the recording
-session itself.
+Recording used LeRobot's standard `python -m lerobot.record` module
+(teleoperation via the leader arm). There is no committed project script
+that drives the recording session itself. Exact command in
+`07_command_reference.md`.
 
 ## Board-state planning for recording
 
@@ -96,8 +97,10 @@ told to target. This is a modification to LeRobot's ACT implementation
 - A checkpoint trained to 15,000 steps performed comparably; 25,000 was not
   strictly necessary.
 
-Training used LeRobot's standard `lerobot-train` CLI against the recorded
-dataset, unmodified aside from the ACT policy change described above.
+Training used LeRobot's standard `python -m lerobot.scripts.train` module
+against the recorded dataset, unmodified aside from the ACT policy change
+described above. Exact command and full `ACTLangConfig` field reference in
+`06_act_configuration.md` and `07_command_reference.md`.
 
 ## Why the policy barely uses vision
 

@@ -16,8 +16,9 @@ PyTorch. It provides:
   robot demonstrations (camera frames, joint states, actions).
 - Implementations of imitation-learning and reinforcement-learning policies,
   including ACT (Action Chunking Transformer), Diffusion Policy, and others.
-- CLI tools for recording demonstrations (`lerobot-record`), training
-  policies (`lerobot-train`), and evaluating them (`lerobot-eval`).
+- CLI tools for recording demonstrations (`python -m lerobot.record`),
+  training policies (`python -m lerobot.scripts.train`), and evaluating them
+  (`python -m lerobot.scripts.eval`).
 
 This project is a fork of LeRobot version 0.2.0. The fork adds a Tic-Tac-Toe
 specific game loop and dataset-planning script on top of the unmodified
@@ -79,3 +80,7 @@ for why the training data reflects this.
 - `04_gameplay_pipeline.md`: the runtime game loop, file by file.
 - `05_known_issues.md`: known bugs, gaps, and cleanup items in the current
   code.
+- `06_act_configuration.md`: ACT model configuration, every tunable field,
+  and how the task-instruction conditioning mechanism works.
+- `07_command_reference.md`: every command from install to inference, in
+  order.

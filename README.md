@@ -33,6 +33,9 @@ Full documentation is in `docs/`:
   training parameters, interpretability findings.
 - `docs/04_gameplay_pipeline.md`: the runtime game loop, file by file.
 - `docs/05_known_issues.md`: known bugs, gaps, and cleanup items.
+- `docs/06_act_configuration.md`: ACT model configuration, layer counts,
+  and the task-instruction conditioning mechanism.
+- `docs/07_command_reference.md`: every command from install to inference.
 
 Read `docs/00_overview.md` first.
 
