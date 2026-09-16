@@ -140,12 +140,13 @@ running the full game loop.
 
 ## Physical game pieces
 
-Standard retail tic-tac-toe sets ship 5 X pieces and 5 O pieces (10 total,
-symmetric so the set works regardless of who goes first). This project uses
-a wooden tile set: square tiles that slot into a fixed 3x3 frame, each
-pre-painted with either an X or an O. Blue = X (human), Red = O (robot).
+This project's board (wooden tiles slotted into a fixed 3x3 frame, each
+pre-painted with either an X or an O) ships 5 X pieces and 4 O pieces (9
+total). Blue = X (human), Red = O (robot). This matches the maximum
+occupancy of a real game: X always moves first, so a full or drawn board
+always has exactly one more X than O (5X + 4O = 9 cells).
 
 Maximum board occupancy used anywhere in this project's dataset or gameplay
-logic is 4 X + 4 O (one move before a full board), so the 5th O piece from a
-standard set is never used. See `03_dataset_and_training.md` for the
+logic is 4 X + 4 O (one move before a full board), so the 5th X piece is
+never used during data collection. See `03_dataset_and_training.md` for the
 occupancy scenarios used during data collection.
