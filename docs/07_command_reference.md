@@ -47,12 +47,22 @@ python -m lerobot.calibrate --teleop.type=so101_leader --teleop.port=<port> --te
 
 ## 3. Record a dataset
 
+This project uses **two cameras**, front-angled and top-down (see
+`01_hardware_setup.md`, "Camera rig"). Both must be listed in
+`--robot.cameras=` so both get recorded into the dataset and both are what
+the ACT policy trains on. Find each camera's OpenCV index first (plug in one
+at a time, or check `ls /dev/video*` on Linux / Device Manager on Windows,
+and confirm with a quick test capture) before filling in the command below.
+
 ```bash
 python -m lerobot.record \
     --robot.type=so101_follower \
     --robot.port=<follower port> \
     --robot.id=<follower id> \
-    --robot.cameras="{cam: {type: opencv, camera_index: 2, width: 640, height: 480}}" \
+    --robot.cameras="{
+        front: {type: opencv, index_or_path: <front camera index>, width: 640, height: 480, fps: 30},
+        top: {type: opencv, index_or_path: <top camera index>, width: 640, height: 480, fps: 30}
+    }" \
     --teleop.type=so101_leader \
     --teleop.port=<leader port> \
     --teleop.id=<leader id> \
@@ -67,22 +77,39 @@ Key `DatasetRecordConfig` / `DatasetConfig` fields
 
 | Flag | Meaning |
 |---|---|
+| `--robot.cameras` | Camera dict, one entry per camera. Key names (`front`, `top` above) become the dataset's camera feature names, and must match what `--robot.cameras=` uses later at inference (step 6). |
 | `--dataset.repo_id` | Dataset identifier (local folder name / Hugging Face Hub repo). |
 | `--dataset.single_task` | Task string stored with every frame in this recording session. For this project: `"Place at Position N"`, matching what `play_TicTacToe.py` sends at inference. |
 | `--dataset.num_episodes` | Number of episodes to record in this run. This project recorded 10 per grid cell. |
 | `--dataset.root` | Local storage path, if not using the default cache location. |
 
-Per this project's design (see `03_dataset_and_training.md`), run this
-command once per grid cell (9 times total), each time as a separate
-recording session with a different `single_task` string and, between
-episodes, a board pre-arranged per `board_generator.py`'s scenario for that
-episode.
+Run this command once per grid cell (9 times total, `N` = 1 through 9),
+each time as a separate recording session with a different `single_task`
+string. Before recording each of the 10 episodes within one session,
+arrange the board's background pieces to match that demo's layout in
+`08_dataset_90_boards.md`, then start the episode and teleoperate one
+pick-and-place of a Red/O tile into the target cell (see
+`03_dataset_and_training.md` for the full dataset design and piece
+constraints).
 
 ## 4. Train
 
+Step 3 records one dataset per grid cell (9 separate `repo_id`s).
+`make_dataset()` (`TicTacToe_with_SO101/src/lerobot/datasets/factory.py`,
+line ~85) checks `isinstance(cfg.dataset.repo_id, str)` and, when it is not
+a plain string, treats it as multiple repo ids and concatenates them via
+`MultiLeRobotDataset`, keeping only the data keys common across all of
+them. This confirms multi-dataset training is supported by the code, but
+this repo has no working example of the exact CLI syntax for passing a list
+to `--dataset.repo_id` (draccus list syntax is typically
+`--dataset.repo_id='[a, b, c]'`, unverified for this exact field). Verify
+against `python -m lerobot.scripts.train --help` or a small test run before
+relying on it, or construct the config in Python instead of via the CLI to
+avoid the ambiguity.
+
 ```bash
 python -m lerobot.scripts.train \
-    --dataset.repo_id=<your-username>/tictactoe-full \
+    --dataset.repo_id=<your-username>/tictactoe-position-1 \
     --policy.type=act_lang \
     --policy.device=cuda \
     --batch_size=64 \
@@ -93,11 +120,15 @@ python -m lerobot.scripts.train \
     --wandb.enable=true
 ```
 
+Single-`repo_id` form shown above is confirmed correct. Replace with all 9
+repo ids once the list syntax above is verified working in your
+environment.
+
 Key `TrainPipelineConfig` fields (`TicTacToe_with_SO101/src/lerobot/configs/train.py`):
 
 | Flag | Meaning |
 |---|---|
-| `--dataset.repo_id` | Dataset to train on (combine multiple recording sessions into one dataset before this step, or point at a merged repo). |
+| `--dataset.repo_id` | Dataset to train on. A single repo id is confirmed to work; multiple repo ids are supported by `make_dataset()` but the exact CLI list syntax is not verified in this repo, see note above. |
 | `--policy.type` | Policy class. Use `act_lang` for this project (see `06_act_configuration.md`). |
 | `--policy.<field>` | Any field on `ACTLangConfig` (layer counts, `dim_model`, optimizer learning rate, etc.), see `06_act_configuration.md` for the full list. |
 | `--batch_size` | This project used 64 (larger than ACT's typical default), which reduced the number of steps needed for convergence. |
@@ -129,11 +160,23 @@ python -m lerobot.play_TicTacToe \
     --robot.type=so101_follower \
     --robot.port=<follower port> \
     --robot.id=<follower id> \
+    --robot.cameras="{
+        front: {type: opencv, index_or_path: <front camera index>, width: 640, height: 480, fps: 30},
+        top: {type: opencv, index_or_path: <top camera index>, width: 640, height: 480, fps: 30}
+    }" \
     --policy.path=<output_dir>/checkpoints/last/pretrained_model \
     --robot_turn_time_s=30 \
     --player_turn_time_s=10 \
     --fps=30
 ```
+
+`--robot.cameras=` here must use the same camera key names (`front`, `top`)
+used when recording the dataset in step 3, since the ACT policy expects an
+observation with those exact feature names. This is separate from the
+Gemini board-reading step, which captures independently via its own
+hardcoded `camera_index = 2` inside `play_TicTacToe.py` (see
+`01_hardware_setup.md`, "Camera rig", and `04_gameplay_pipeline.md`); it is
+not controlled by this flag.
 
 Before running: place the physical board with the human's first X already
 placed (see `03_dataset_and_training.md`, "Turn assignment", the script does
