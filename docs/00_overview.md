@@ -84,3 +84,5 @@ for why the training data reflects this.
   and how the task-instruction conditioning mechanism works.
 - `07_command_reference.md`: every command from install to inference, in
   order.
+- `08_dataset_90_boards.md`: all 90 board layouts for the recording session,
+  rendered as 3x3 grids, one per demo.

@@ -28,6 +28,12 @@ Recording used LeRobot's standard `python -m lerobot.record` module
 that drives the recording session itself. Exact command in
 `07_command_reference.md`.
 
+The exact 90 board layouts (which background cells are occupied, by which
+color, for every one of the 90 demos) are listed in
+`08_dataset_90_boards.md`, generated from `board_generator.py` with
+`seed=1`. Arrange the physical board to match each layout before recording
+that demo.
+
 ## Board-state planning for recording
 
 `TicTacToe_with_SO101/src/lerobot/scripts/ticTacToe/board_generator.py`
@@ -116,6 +122,12 @@ background clutter vary. Since color carries no information relevant to the
 task, the model has no incentive to look at the image to distinguish
 anything. A future dataset that trains the robot to place either color would
 make color task-relevant, which should increase reliance on vision.
+
+This is a learned property of this specific dataset, not an architectural
+limitation of ACT; the model's vision pathway is fully active during both
+training and inference. See `06_act_configuration.md`, "Vision is
+architecturally live," for the code-level detail and why switching to a
+different policy architecture would not fix this on its own.
 
 Result videos referenced in the original write-up are not stored in this
 repository (see `05_known_issues.md` for the state of

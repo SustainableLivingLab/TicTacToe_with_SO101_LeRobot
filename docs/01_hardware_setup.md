@@ -121,20 +121,47 @@ first, then move each joint through its full range of motion.
 
 ## Camera rig
 
-This project uses a single fixed camera (`camera_index = 2` in
-`play_TicTacToe.py`) positioned to view the board at an angle, not directly
-overhead. The game loop corrects for this with a perspective transform:
+This project uses two fixed cameras, at different angles, for two separate
+purposes. They are not the same camera and are not interchangeable in the
+codebase.
 
-- Raw camera frame is cropped to the board region using fixed percentage
-  offsets.
-- A perspective warp (`cv2.getPerspectiveTransform` / `cv2.warpPerspective`)
-  maps 4 manually measured corner points to a clean top-down 400x400 view.
-- A final crop and 180-degree rotation produce the frame sent to Gemini.
+- **Front-angled camera**: elevated, wide-angle view showing the arm's full
+  reach, the board, the pickup zone (where a loose O tile is placed for the
+  robot to grasp), and a marked drop-zone area. Configured as one of the
+  entries in the robot's `cameras` dict (see `--robot.cameras=` in
+  `07_command_reference.md`), and feeds the ACT policy's
+  `observation.images` during both recording and inference, alongside the
+  top-down camera. It is not used by the Gemini board-reading step.
+- **Top-down camera**: steep, near-overhead view of the 3x3 grid, minimal
+  depth ambiguity. Also configured in the robot's `cameras` dict and feeds
+  the ACT policy the same way as the front-angled camera. Additionally,
+  this is the camera `play_TicTacToe.py` captures from separately
+  (`camera_index = 2`, hardcoded) for the Gemini board-reading step,
+  independent of the policy's own observation pipeline.
 
-All of these values (`camera_index`, crop percentages, the 4 corner points)
-are hardcoded and calibrated to one specific physical camera position and
-board placement. If the camera, table, or board moves, these values need to
-be re-measured. `TicTacToe_with_SO101/src/lerobot/scripts/ticTacToe/image_transformation_testing.py`
+These two consumption paths are separate and do not have to agree:
+
+1. **ACT policy observation.** `SO101Follower.get_observation()` iterates
+   every camera configured in `config.cameras` and includes all of them in
+   the observation dict. Whatever cameras are passed via `--robot.cameras=`
+   at record, train, and play time are what the policy actually sees; this
+   project uses both the front-angled and top-down cameras here.
+2. **Gemini board-reading.** `play()` calls `get_grid_image(camera_index=2)`
+   directly via OpenCV, independent of the robot's camera config, to
+   capture a single frame for the perception step. The game loop corrects
+   for this camera's angle with a perspective transform:
+   - Raw camera frame is cropped to the board region using fixed percentage
+     offsets.
+   - A perspective warp (`cv2.getPerspectiveTransform` /
+     `cv2.warpPerspective`) maps 4 manually measured corner points to a
+     clean top-down 400x400 view.
+   - A final crop and 180-degree rotation produce the frame sent to Gemini.
+
+All of the Gemini-path values (`camera_index`, crop percentages, the 4
+corner points) are hardcoded and calibrated to one specific physical camera
+position and board placement. If that camera, the table, or the board
+moves, these values need to be re-measured.
+`TicTacToe_with_SO101/src/lerobot/scripts/ticTacToe/image_transformation_testing.py`
 is a standalone script for testing and recalibrating this pipeline without
 running the full game loop.
 

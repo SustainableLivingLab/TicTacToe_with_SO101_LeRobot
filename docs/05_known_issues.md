@@ -42,6 +42,48 @@
   bug. See `03_dataset_and_training.md`, "Known limitation: this dataset is
   not environment-agnostic," for what a future dataset would need to change.
 
+## Runtime behavior gaps
+
+- **Win/draw/loss are not distinguished.** `analyzeboard()` returns which
+  player's value completed a line (`1` for O/robot, `-1` for X/human) or `0`
+  for no winner yet, but `play()` only branches on whether the result is
+  zero or non-zero. A robot win, a human win, and a draw (no winning line,
+  board full) all collapse into the same `"Game Over"` branch and the same
+  spoken message. There is no code path that reports who actually won.
+- **No completion detection during the robot's turn.** `call_policy()` runs
+  the ACT policy in a fixed time loop (`robot_turn_time_s`, default 30
+  seconds) with no check for whether the pick-and-place actually succeeded
+  mid-motion. The turn simply ends when the timer runs out (or on manual
+  keyboard exit), regardless of outcome. The only thing that reveals
+  whether the placement worked is the next camera read and Gemini call, at
+  the start of the following loop iteration, after the fact.
+- **No presence check at the pickup spot.** Nothing in the pipeline verifies
+  a Red/O tile is actually present at the fixed pickup location before the
+  arm attempts to grab it. If the pickup spot is not refilled between
+  turns, the arm will still attempt its trained pick motion against an
+  empty spot, with no detection or fallback. This is an operating-procedure
+  requirement (always refill promptly), not something the current policy or
+  game loop guards against.
+- **Policy checkpoint reloaded every turn.** `call_policy()` calls
+  `make_policy(cfg.policy, ds_meta=cfg.metadata)` fresh on every invocation,
+  once per robot turn, rather than loading the checkpoint once at script
+  startup and reusing it. This adds avoidable load time to every single
+  robot turn.
+- **Only one physical trajectory is learned per grid cell.** Because the
+  pickup spot is fixed and the board itself is fixed, the pick motion and
+  each cell's place motion are each a single repeated joint-space
+  trajectory across all 10 demos for that cell, not a range of trajectories
+  to the same destination from different starting conditions. The dataset
+  varies background clutter (see `03_dataset_and_training.md`) but not the
+  physical pick location, arm starting pose, or place location. Given a
+  fixed pickup spot is a deliberate design choice for this project's scope
+  (not a flaw, since deployment also always uses a fixed spot), this means
+  the trained policy is closer to 9 fixed motor scripts (one per cell) than
+  a policy that generalizes joint-space reaching. Consistent with the
+  near-zero vision attention already documented; see
+  `03_dataset_and_training.md`, "Known limitation: this dataset is not
+  environment-agnostic."
+
 ## Repository state
 
 - `TicTacToe_with_SO101/output/attention_analysis_results/` and roughly 45

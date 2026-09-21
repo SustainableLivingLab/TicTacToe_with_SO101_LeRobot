@@ -163,3 +163,47 @@ To change how many distinct tasks the model conditions on (e.g. a larger
 board), both `create_task_embeddings()`'s hardcoded `9` and
 `prepare_language()`'s hardcoded `["1", ..., "9"]` range and single-character
 parsing would need to change together.
+
+## Vision is architecturally live; low attention is a learned, not structural, property
+
+Interpretability analysis found the trained policy attends almost entirely
+to task instruction and joint state, and barely to vision (see
+`03_dataset_and_training.md`). This does not mean ACT is structurally blind
+to images. The vision pathway is fully wired into the forward pass:
+
+```python
+# ACT.__init__
+self.backbone = IntermediateLayerGetter(backbone_model, return_layers={"layer4": "feature_map"})
+self.encoder_img_feat_input_proj = nn.Conv2d(backbone_model.fc.in_features, config.dim_model, kernel_size=1)
+self.encoder_cam_feat_pos_embed = ACTSinusoidalPositionEmbedding2d(config.dim_model // 2)
+
+# ACT.forward
+for img in batch["observation.images"]:
+    cam_features = self.backbone(img)["feature_map"]
+    cam_pos_embed = self.encoder_cam_feat_pos_embed(cam_features)
+    cam_features = self.encoder_img_feat_input_proj(cam_features)
+    encoder_in_tokens.extend(list(cam_features))
+```
+
+Every training and inference image is run through the ResNet backbone,
+projected into transformer tokens, and fed into the same encoder attention
+mechanism as the task and joint-state tokens. Nothing in the architecture
+prevents the model from attending to those tokens.
+
+Attention weight is learned, not fixed. Given this project's dataset (fixed
+camera, fixed board, fixed pickup spot, and a task token that already
+losslessly encodes the target cell, see `03_dataset_and_training.md`), the
+model found it could minimize training loss without relying on vision,
+since the task token alone was sufficient. There was no gradient pressure
+to route attention there.
+
+Consequence: switching to a different policy architecture (Diffusion
+Policy, a VLA such as SmolVLA, or anything else) trained on this same
+dataset would very likely reproduce the same near-zero vision attention,
+since the shortcut being learned is a property of the data, not of ACT
+specifically. Fixing this requires changing what the data makes necessary
+to attend to (see `03_dataset_and_training.md`, "Known limitation: this
+dataset is not environment-agnostic"), not changing the model. A stronger
+pretrained vision backbone or a VLA's pretrained visual encoder could still
+help with cross-environment robustness once the data actually requires
+vision, but is not a fix for this specific attention pattern on its own.
