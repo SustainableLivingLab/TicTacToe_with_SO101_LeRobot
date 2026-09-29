@@ -339,15 +339,26 @@ Edit `dataset.repo_id` to the single dataset repo id from step 3, then run:
 python -m lerobot.scripts.train --config_path=train_config.yaml
 ```
 
-`policy.push_to_hub: false` avoids
-`ValueError: 'policy.repo_id' argument missing`
-(`TicTacToe_with_SO101/src/lerobot/configs/train.py`, `validate()`, line
-~119): `PreTrainedConfig.push_to_hub` defaults to `True`, which requires a
-`policy.repo_id` to push the trained checkpoint to. Keeping it `false`
-just skips that Hub push; the checkpoint is still written locally to
-`output_dir`. Set `push_to_hub: true` and add a `repo_id:` under `policy:`
-instead if you do want the trained model auto-pushed to the Hub at the end
-of training.
+### What `ValueError: 'policy.repo_id' argument missing` means
+
+If you see this error, here is what it actually means and why: after
+training finishes, this script tries to automatically upload the trained
+model to the Hugging Face Hub, the same way `dataset.push_to_hub` uploads
+a recorded dataset. To upload something, it needs a name to upload it
+under, a `policy.repo_id` (e.g. `your-username/tictactoe-act-lang`). This
+model-upload behavior is turned on by default
+(`PreTrainedConfig.push_to_hub` defaults to `True` in
+`TicTacToe_with_SO101/src/lerobot/configs/policies.py`), and if it's on
+but no name was given, training refuses to start at all rather than train
+for hours and then fail to upload at the very end.
+
+`train_config.yaml`'s `policy: push_to_hub: false` simply turns this
+upload off. The checkpoint still gets saved normally to `output_dir` on
+disk either way; `push_to_hub` only controls whether it also gets copied
+to the Hub automatically. If the automatic Hub upload is wanted, set
+`push_to_hub: true` and add a `repo_id: your-username/<any-name>` line
+under `policy:` in the YAML, and the error goes away because a name now
+exists to upload under.
 
 Key `TrainPipelineConfig` fields (`TicTacToe_with_SO101/src/lerobot/configs/train.py`):
 
