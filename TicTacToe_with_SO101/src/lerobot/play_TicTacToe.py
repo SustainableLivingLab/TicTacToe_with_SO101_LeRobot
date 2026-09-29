@@ -43,6 +43,12 @@ if not GEMINI_API_KEY:
     )
 client = genai.Client(api_key=GEMINI_API_KEY)
 
+# Physical piece colors. Human always plays X, robot always plays O.
+# Override per physical board via .env, e.g. X_COLOR=Black for a
+# Black/Red piece set instead of the default Blue/Red set.
+X_COLOR = os.environ.get("X_COLOR", "Blue")
+O_COLOR = os.environ.get("O_COLOR", "Red")
+
 class MockDatasetMetadata:
     """Mock metadata object to satisfy make_policy requirements"""
     def __init__(self, features: dict, stats: dict = None):
@@ -297,7 +303,7 @@ def process_images_with_LLM(image: Image.Image, prompt: str) -> Optional[str]:
 
 def get_LLM_output(image: Image.Image) -> str:
     """Get LLM decision for next move."""
-    prompt = """"
+    prompt = f""""
             The attached images show a 3x3 grid board used for playing the game with tokens.
 
             The board orientation is as follows:
@@ -314,11 +320,11 @@ def get_LLM_output(image: Image.Image) -> str:
             4 | 5 | 6
             ---------
             7 | 8 | 9
-      
+
             Mention the state of the board in the following format:
 
-            Position 1: Empty/Red/Blue
-            Position 2: Empty/Red/Blue
+            Position 1: Empty/{O_COLOR}/{X_COLOR}
+            Position 2: Empty/{O_COLOR}/{X_COLOR}
             And so on
 
             """
@@ -338,7 +344,8 @@ def parse_board_state(board_string):
         board_string (str): String containing position information
         
     Returns:
-        list: Vector where -1 = Blue, 1 = Red, 0 = Empty
+        list: Vector where -1 = X_COLOR, 1 = O_COLOR, 0 = Empty
+              (X_COLOR/O_COLOR set via env vars, default Blue/Red)
     """
     # Initialize vector with zeros
     vector = [0] * 9
@@ -362,9 +369,9 @@ def parse_board_state(board_string):
                 index = position_num - 1
 
                 # Set value based on state
-                if state_part.lower() == 'blue':
+                if state_part.lower() == X_COLOR.lower():
                     vector[index] = -1
-                elif state_part.lower() == 'red':
+                elif state_part.lower() == O_COLOR.lower():
                     vector[index] = 1
                 elif state_part.lower() == 'empty':
                     vector[index] = 0

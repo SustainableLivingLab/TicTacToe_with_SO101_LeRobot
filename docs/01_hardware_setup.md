@@ -169,9 +169,15 @@ running the full game loop.
 
 This project's board (wooden tiles slotted into a fixed 3x3 frame, each
 pre-painted with either an X or an O) ships 5 X pieces and 4 O pieces (9
-total). Blue = X (human), Red = O (robot). This matches the maximum
-occupancy of a real game: X always moves first, so a full or drawn board
-always has exactly one more X than O (5X + 4O = 9 cells).
+total). This matches the maximum occupancy of a real game: X always moves
+first, so a full or drawn board always has exactly one more X than O
+(5X + 4O = 9 cells).
+
+Piece colors are configurable, not fixed. This project's own board uses
+Blue for X and Red for O, but a different physical set with different
+colors (for example Black X / Red O) works without any code change, only
+setting `X_COLOR` and `O_COLOR` in `.env`. See `02_software_setup.md`,
+"Piece colors."
 
 Maximum board occupancy used anywhere in this project's dataset or gameplay
 logic is 4 X + 4 O (one move before a full board), so the 5th X piece is

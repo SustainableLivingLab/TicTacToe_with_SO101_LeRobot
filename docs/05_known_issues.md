@@ -17,13 +17,17 @@
   in `crop_image`/`get_LLM_output`.
 - Hardcoded Gemini API key. Moved to the `GEMINI_API_KEY` environment
   variable, read from a gitignored `.env` file (see `02_software_setup.md`).
-- Color/token naming inconsistency between `play_TicTacToe.py` and
-  `board_generator.py`. Both now consistently use Blue/Red, matching the
-  physical wooden tile set (see `01_hardware_setup.md`). Previously the
-  board used Black/Brown carrom coins; if the physical set changes again,
-  update the Gemini prompt and parser in `play_TicTacToe.py` and
-  `image_transformation_testing.py`, plus `print_board`'s symbol map and
-  `board_to_description()` in `board_generator.py`.
+- Hardcoded piece colors. `play_TicTacToe.py`, `image_transformation_testing.py`,
+  and `board_generator.py` all read piece colors from the `X_COLOR` and
+  `O_COLOR` environment variables now (default `Blue`/`Red`), instead of
+  hardcoding color literals. Different physical boards (e.g. Black X / Red
+  O) no longer need a code edit, only a `.env` change. See
+  `02_software_setup.md`, "Piece colors."
+- Second hardcoded Gemini API key found in
+  `TicTacToe_with_SO101/src/lerobot/scripts/ticTacToe/image_transformation_testing.py`
+  (a plaintext key, separate from the one already fixed in
+  `play_TicTacToe.py`). Moved to the same `GEMINI_API_KEY` environment
+  variable pattern.
 
 ## Design limitations
 

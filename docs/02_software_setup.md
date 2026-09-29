@@ -80,6 +80,28 @@ Note: the script reads `os.environ` directly and does not auto-load `.env`
 files. Export the variable into your shell before running, or use your
 IDE/run configuration's env-file support.
 
+### Piece colors
+
+Physical tic-tac-toe sets vary. This project's own board uses Blue for X
+and Red for O, but a different set (for example Black X pieces and Red O
+pieces) is common. Override the colors with two optional environment
+variables, read in `play_TicTacToe.py`, `image_transformation_testing.py`,
+and `board_generator.py`:
+
+```bash
+X_COLOR=Black
+O_COLOR=Red
+```
+
+Both default to `Blue`/`Red` if unset, so existing setups need no change.
+Set these to whatever color words actually appear on your physical pieces;
+they flow directly into the Gemini vision prompt (Gemini is asked to
+report each cell as `Empty`/`<O_COLOR>`/`<X_COLOR>`) and into the parser
+that reads Gemini's response back into a board-state vector, so the words
+here must match what Gemini will plausibly call the piece colors it sees
+(a common English color name works best, e.g. `Black`, not a hex code or
+brand name).
+
 ## Running the game, recording, and training
 
 Full command reference (hardware bring-up, recording, training, inference)

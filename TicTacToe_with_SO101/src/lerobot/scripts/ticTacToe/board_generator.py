@@ -4,9 +4,15 @@ Tic-Tac-Toe Board Generator for Robot Training Dataset
 Generates diverse board configurations for each target position.
 """
 
+import os
 import random
 import itertools
 from typing import List, Tuple, Optional
+
+# Physical piece colors, matching play_TicTacToe.py / image_transformation_testing.py.
+# Override per physical board via .env, e.g. X_COLOR=Black for a Black/Red piece set.
+X_COLOR = os.environ.get("X_COLOR", "Blue")
+O_COLOR = os.environ.get("O_COLOR", "Red")
 
 class TicTacToeGenerator:
     def __init__(self, seed: int = 0):
@@ -121,21 +127,21 @@ class TicTacToeGenerator:
     
     def print_board(self, board: List[Optional[str]]) -> None:
         """Print board in a readable format."""
-        symbols = {'X': 'BLU', 'O': 'RED', None: '.'}
+        symbols = {'X': X_COLOR[:3].upper(), 'O': O_COLOR[:3].upper(), None: '.'}
         for i in range(3):
             row = ' '.join(symbols[board[i*3 + j]] for j in range(3))
             print(row)
         print()
-    
+
     def board_to_description(self, board: List[Optional[str]]) -> str:
         """Convert board to human-readable description."""
         x_count = board.count('X')
         o_count = board.count('O')
-        
+
         if x_count == 0 and o_count == 0:
             return "Empty board"
-        
-        return f"{x_count} Blue, {o_count} Red"
+
+        return f"{x_count} {X_COLOR}, {o_count} {O_COLOR}"
 
 # Example usage
 if __name__ == "__main__":

@@ -2,12 +2,25 @@
 import cv2
 from PIL import Image
 import io
+import os
 from google import genai
 from google.genai import types
 from typing import Optional
 import numpy as np
 
-client = genai.Client(api_key="AIzaSyBzTXl9RXslaa4ReL19T19iEMM2l1v_O34")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+if not GEMINI_API_KEY:
+    raise RuntimeError(
+        "GEMINI_API_KEY environment variable not set. "
+        "Set it in your shell or in a local .env file (see .env.example)."
+    )
+client = genai.Client(api_key=GEMINI_API_KEY)
+
+# Physical piece colors. Human always plays X, robot always plays O.
+# Override per physical board via .env, e.g. X_COLOR=Black for a
+# Black/Red piece set instead of the default Blue/Red set.
+X_COLOR = os.environ.get("X_COLOR", "Blue")
+O_COLOR = os.environ.get("O_COLOR", "Red")
 
 def process_images_with_LLM(image: Image.Image, prompt: str) -> Optional[str]:
     """Process multiple images with LLM API with error handling."""
@@ -39,7 +52,7 @@ def process_images_with_LLM(image: Image.Image, prompt: str) -> Optional[str]:
 
 def get_LLM_output(image) -> str:
     """Get LLM decision for next move."""
-    prompt = """"
+    prompt = f""""
             The attached images show a 3x3 grid board used for playing the game with tokens.
 
             The board orientation is as follows:
@@ -50,14 +63,14 @@ def get_LLM_output(image) -> str:
             Position 4 | Position 5 | Position 6
             Bottom Row:
             Position 7 | Position 8 | Position 9
-      
+
             Mention the state of the board in the following format:
 
-            Position 1: Empty/Red/Blue
-            Position 2: Empty/Red/Blue
+            Position 1: Empty/{O_COLOR}/{X_COLOR}
+            Position 2: Empty/{O_COLOR}/{X_COLOR}
             And so on
 
-            
+
             """
 
     response = process_images_with_LLM(image, prompt)
@@ -244,7 +257,8 @@ def parse_board_state(board_string):
         board_string (str): String containing position information
         
     Returns:
-        list: Vector where -1 = Blue, 1 = Red, 0 = Empty
+        list: Vector where -1 = X_COLOR, 1 = O_COLOR, 0 = Empty
+              (X_COLOR/O_COLOR set via env vars, default Blue/Red)
     """
     # Initialize vector with zeros
     vector = [0] * 9
@@ -268,9 +282,9 @@ def parse_board_state(board_string):
                 index = position_num - 1
 
                 # Set value based on state
-                if state_part.lower() == 'blue':
+                if state_part.lower() == X_COLOR.lower():
                     vector[index] = -1
-                elif state_part.lower() == 'red':
+                elif state_part.lower() == O_COLOR.lower():
                     vector[index] = 1
                 elif state_part.lower() == 'empty':
                     vector[index] = 0
