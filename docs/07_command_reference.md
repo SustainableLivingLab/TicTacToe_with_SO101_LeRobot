@@ -61,6 +61,14 @@ python -m lerobot.calibrate --robot.type=so101_follower --robot.port=<port> --ro
 python -m lerobot.calibrate --teleop.type=so101_leader --teleop.port=<port> --teleop.id=<name>
 ```
 
+`<name>` (the `--robot.id=` / `--teleop.id=` value) is not read from the
+hardware; it is a name you invent yourself, e.g. `my_follower_arm`. It is
+used only to name the calibration file written to disk for that arm
+(`RobotConfig.id` in `TicTacToe_with_SO101/src/lerobot/robots/config.py`).
+Whatever you type here during calibration is the `--robot.id=` /
+`--teleop.id=` value to reuse in every later command (recording, training
+input, and inference) for that same physical arm.
+
 ## 3. Record a dataset
 
 This project uses **two cameras**, front-angled and top-down (see
@@ -110,42 +118,64 @@ constraints).
 
 ## 4. Train
 
-Step 3 records one dataset per grid cell (9 separate `repo_id`s).
-`make_dataset()` (`TicTacToe_with_SO101/src/lerobot/datasets/factory.py`,
-line ~85) checks `isinstance(cfg.dataset.repo_id, str)` and, when it is not
-a plain string, treats it as multiple repo ids and concatenates them via
-`MultiLeRobotDataset`, keeping only the data keys common across all of
-them. This confirms multi-dataset training is supported by the code, but
-this repo has no working example of the exact CLI syntax for passing a list
-to `--dataset.repo_id` (draccus list syntax is typically
-`--dataset.repo_id='[a, b, c]'`, unverified for this exact field). Verify
-against `python -m lerobot.scripts.train --help` or a small test run before
-relying on it, or construct the config in Python instead of via the CLI to
-avoid the ambiguity.
+You train **once**, not once per cell. Step 3 records one dataset per grid
+cell (9 separate `repo_id`s), but all 9 feed a single training run that
+produces one task-conditioned policy covering all 9 cells (see
+`06_act_configuration.md`, the task-instruction mechanism is what makes one
+policy handle all 9 positions). Training once per cell would defeat that
+and give you 9 separate, non-cell-aware policies instead.
 
-```bash
-python -m lerobot.scripts.train \
-    --dataset.repo_id=<your-username>/tictactoe-position-1 \
-    --policy.type=act_lang \
-    --policy.device=cuda \
-    --batch_size=64 \
-    --steps=25000 \
-    --save_freq=5000 \
-    --output_dir=outputs/train/tictactoe_act_lang \
-    --job_name=tictactoe_act_lang \
-    --wandb.enable=true
+`make_dataset()` (`TicTacToe_with_SO101/src/lerobot/datasets/factory.py`,
+line ~85) accepts a list of repo ids for `dataset.repo_id` and concatenates
+them automatically via `MultiLeRobotDataset`. To pass a list reliably (CLI
+flag quoting for a list is inconsistent across shells), use a YAML config
+file instead of a CLI flag for this one field. `python -m lerobot.scripts.train`
+supports `--config_path=<file>` (see `train.py`'s `@parser.wrap()`,
+`config_path` argument), which loads a YAML config, and any field can still
+be overridden or added on top of it as a normal `--flag=value` on the same
+command.
+
+Create `train_config.yaml`:
+
+```yaml
+dataset:
+  repo_id:
+    - <your-username>/tictactoe-position-1
+    - <your-username>/tictactoe-position-2
+    - <your-username>/tictactoe-position-3
+    - <your-username>/tictactoe-position-4
+    - <your-username>/tictactoe-position-5
+    - <your-username>/tictactoe-position-6
+    - <your-username>/tictactoe-position-7
+    - <your-username>/tictactoe-position-8
+    - <your-username>/tictactoe-position-9
+policy:
+  type: act_lang
+  device: cuda
+batch_size: 64
+steps: 25000
+save_freq: 5000
+output_dir: outputs/train/tictactoe_act_lang
+job_name: tictactoe_act_lang
+wandb:
+  enable: true
 ```
 
-Single-`repo_id` form shown above is confirmed correct. Replace with all 9
-repo ids once the list syntax above is verified working in your
-environment.
+Then run:
+
+```bash
+python -m lerobot.scripts.train --config_path=train_config.yaml
+```
+
+This is the definitive way to pass all 9 datasets in one run. Replace the 9
+placeholder repo ids with your own from step 3.
 
 Key `TrainPipelineConfig` fields (`TicTacToe_with_SO101/src/lerobot/configs/train.py`):
 
-| Flag | Meaning |
+| Field | Meaning |
 |---|---|
-| `--dataset.repo_id` | Dataset to train on. A single repo id is confirmed to work; multiple repo ids are supported by `make_dataset()` but the exact CLI list syntax is not verified in this repo, see note above. |
-| `--policy.type` | Policy class. Use `act_lang` for this project (see `06_act_configuration.md`). |
+| `dataset.repo_id` | Dataset(s) to train on. List of 9 repo ids in the YAML config, as shown above, for this project's full multi-cell training run. |
+| `policy.type` | Policy class. Use `act_lang` for this project (see `06_act_configuration.md`). |
 | `--policy.<field>` | Any field on `ACTLangConfig` (layer counts, `dim_model`, optimizer learning rate, etc.), see `06_act_configuration.md` for the full list. |
 | `--batch_size` | This project used 64 (larger than ACT's typical default), which reduced the number of steps needed for convergence. |
 | `--steps` | This project used 25,000 (40 epochs). A checkpoint at 15,000 performed comparably. |
@@ -188,11 +218,26 @@ python -m lerobot.play_TicTacToe \
 
 `--robot.cameras=` here must use the same camera key names (`front`, `top`)
 used when recording the dataset in step 3, since the ACT policy expects an
-observation with those exact feature names. This is separate from the
-Gemini board-reading step, which captures independently via its own
-hardcoded `camera_index = 2` inside `play_TicTacToe.py` (see
+observation with those exact feature names. These key names are arbitrary,
+`front` and `top` are just the names used throughout this doc; any names
+work as long as they match between recording and inference. This is
+separate from the Gemini board-reading step, which captures independently
+via its own hardcoded `camera_index = 2` inside `play_TicTacToe.py` (see
 `01_hardware_setup.md`, "Camera rig", and `04_gameplay_pipeline.md`); it is
 not controlled by this flag.
+
+`--policy.path=` must point to a checkpoint that actually exists on the
+machine running this command. Training (step 4) is local compute; it does
+not run "in the cloud" by itself. If you have no local GPU, train on a
+rented cloud GPU or Google Colab instead (see
+`TicTacToe_with_SO101/docs/source/il_robots.mdx`, "Train using Colab" and
+"Upload policy checkpoints", for a worked example including the exact
+`huggingface-cli upload` command). Either way, the checkpoint then needs to
+reach the machine connected to the robot: copy
+`<output_dir>/checkpoints/last/pretrained_model` there directly and point
+`--policy.path=` at that local copy, or upload it to the Hugging Face Hub
+from the training machine and set `--policy.path=<hf_user>/<repo_name>` on
+the robot machine instead, which downloads it automatically.
 
 Before running: place the physical board with the human's first X already
 placed (see `03_dataset_and_training.md`, "Turn assignment", the script does
