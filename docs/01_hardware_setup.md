@@ -119,6 +119,21 @@ python -m lerobot.calibrate \
 The calibration routine asks you to move the arm to its middle position
 first, then move each joint through its full range of motion.
 
+### Calibrating via LeLab instead of the CLI
+
+[LeLab](https://github.com/nicolas-rabault/leLab) is a GUI wrapper around
+this same LeRobot library, not a separate tool. Calibrating through LeLab
+is a real substitute for the CLI commands above, not a separate or
+incompatible process; the robot name you give it becomes the same
+`--robot.id` / `--teleop.id`, and it writes the same calibration file
+format (`<calibration folder>/<name>.json`) that `python -m lerobot.calibrate`
+does. If you already calibrated via LeLab, you do not need to also run the
+CLI commands above for the same arm. This project has not verified whether
+LeLab's dataset recording or training features produce output directly
+compatible with the `python -m lerobot.record` / `python -m
+lerobot.scripts.train` commands in `07_command_reference.md`; only
+calibration compatibility is confirmed.
+
 ## Camera rig
 
 This project uses two fixed cameras, at different angles, for two separate

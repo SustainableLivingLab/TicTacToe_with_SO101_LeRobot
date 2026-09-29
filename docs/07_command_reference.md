@@ -57,8 +57,8 @@ it first appears, but this is the plain-language version up front.
 - **`--config_path=<file>.yaml`**: an alternative to typing every
   `--flag=value` individually on the command line. Point this at a YAML
   file (like `train_config.yaml`, included in this repo) that holds the
-  same settings, useful when a value (like a list of 9 dataset repo ids)
-  is awkward to type as a single command-line flag. See section 4.
+  same settings, easier to review and reuse than one very long command
+  line for training. See section 4.
 
 ## 1. Install
 
@@ -144,26 +144,52 @@ huggingface.co first; `dataset.push_to_hub()` calls `create_repo()`
 internally and creates it automatically the first time each `repo_id` is
 pushed.
 
-### What to name each dataset's `repo_id`
+### One dataset, not nine
 
-`--dataset.repo_id=<your-username>/tictactoe-position-<N>` has two parts:
+Earlier versions of this doc said to create 9 separate dataset repos (one
+per grid cell) and combine them at training time via a list of repo ids.
+That does not work in this lerobot version:
+`TrainPipelineConfig.validate()` (`TicTacToe_with_SO101/src/lerobot/configs/train.py`,
+line ~107) raises `NotImplementedError("LeRobotMultiDataset is not
+currently implemented.")` the moment `dataset.repo_id` is a list, before
+training even starts, and `make_dataset()`
+(`TicTacToe_with_SO101/src/lerobot/datasets/factory.py`, line ~99) has the
+same hard `raise` guarding its multi-dataset branch. Multi-dataset training
+is not available in this codebase, full stop; it is present as dead code,
+not a working feature.
+
+The real workflow: record all 9 cells into **one single dataset repo**,
+using `--resume=true` for the 2nd through 9th recording sessions so each
+new session appends its episodes to the same growing dataset instead of
+creating a separate one. `single_task` is attached per-frame at record
+time (`record.py`, `dataset.add_frame(frame, task=single_task)`), so each
+session can use its own `"Place at Position N"` string even though they
+all land in the same dataset.
+
+**If you already recorded 9 separate datasets** (one per cell, following
+the earlier, incorrect version of this doc), you do not need to re-record.
+`TicTacToe_with_SO101/merge_datasets.py`, included in this repo, downloads
+all 9 existing dataset repos and merges them into one new dataset repo you
+can point `train_config.yaml` at. Read the script's own docstring before
+running it, it includes a required small test-run step first. Compiles
+correctly but has not been run against real data by anyone yet; test on a
+small slice before trusting it with your full recorded data.
+
+`--dataset.repo_id=<your-username>/tictactoe` has two parts:
 
 - `<your-username>` is your actual Hugging Face username (the account you
   just logged into above), not a literal placeholder and not this
   project's username. Find it at https://huggingface.co/settings/profile
   or from the URL of your own Hub profile page.
-- `tictactoe-position-<N>` is a naming convention, not a required exact
-  string. `<N>` is the grid cell this recording session is for (1 through
-  9). The name after your username can be anything; `tictactoe-position-N`
-  is just a clear, consistent pattern, one repo per cell, that this doc
-  and `train_config.yaml`'s placeholders use throughout. If you use a
-  different naming pattern, use it consistently and update
-  `train_config.yaml`'s 9 entries to match your real names.
+- `tictactoe` (or any name you like) is the dataset name. Pick one name and
+  reuse the exact same `repo_id` across all 9 recording sessions; do not
+  vary it per cell.
 
-Concretely: if your Hugging Face username is `melissa`, recording for cell
-3 uses `--dataset.repo_id=melissa/tictactoe-position-3`, and that becomes a
-new dataset repo at `https://huggingface.co/datasets/melissa/tictactoe-position-3`
-after the session finishes and pushes.
+Concretely: if your Hugging Face username is `melissa`, every one of the 9
+recording sessions uses `--dataset.repo_id=melissa/tictactoe`, and that
+becomes one dataset repo at
+`https://huggingface.co/datasets/melissa/tictactoe` holding all 90
+episodes once the 9th session finishes and pushes.
 
 ### Recording command
 
@@ -210,6 +236,8 @@ numbers as `index_or_path` for `front` and `top` respectively in the
 command below. Indices can shift if you unplug/replug a camera or reboot;
 re-run this script if a camera stops responding at its previous index.
 
+**First session (cell 1)**, creates the dataset:
+
 ```bash
 python -m lerobot.record \
     --robot.type=so101_follower \
@@ -222,10 +250,36 @@ python -m lerobot.record \
     --teleop.type=so101_leader \
     --teleop.port=<leader port> \
     --teleop.id=<leader id> \
-    --dataset.repo_id=<your-username>/tictactoe-position-<N> \
+    --dataset.repo_id=<your-username>/tictactoe \
     --dataset.num_episodes=10 \
-    --dataset.single_task="Place at Position <N>"
+    --dataset.single_task="Place at Position 1"
 ```
+
+**Sessions 2 through 9 (cells 2-9)**, append to the same dataset, add
+`--resume=true` and change only `--dataset.single_task=`:
+
+```bash
+python -m lerobot.record \
+    --robot.type=so101_follower \
+    --robot.port=<follower port> \
+    --robot.id=<follower id> \
+    --robot.cameras="{
+        front: {type: opencv, index_or_path: <front camera index>, width: 640, height: 480, fps: 30},
+        top: {type: opencv, index_or_path: <top camera index>, width: 640, height: 480, fps: 30}
+    }" \
+    --teleop.type=so101_leader \
+    --teleop.port=<leader port> \
+    --teleop.id=<leader id> \
+    --dataset.repo_id=<your-username>/tictactoe \
+    --dataset.num_episodes=10 \
+    --dataset.single_task="Place at Position 2" \
+    --resume=true
+```
+
+`--dataset.repo_id` is identical across all 9 commands. Only
+`--dataset.single_task` changes (`"Place at Position 1"` through
+`"Place at Position 9"`), and `--resume=true` is added from the 2nd session
+onward.
 
 Key `DatasetRecordConfig` / `DatasetConfig` fields
 (`TicTacToe_with_SO101/src/lerobot/record.py`,
@@ -234,15 +288,15 @@ Key `DatasetRecordConfig` / `DatasetConfig` fields
 | Flag | Meaning |
 |---|---|
 | `--robot.cameras` | Camera dict, one entry per camera. Key names (`front`, `top` above) become the dataset's camera feature names, and must match what `--robot.cameras=` uses later at inference (step 6). |
-| `--dataset.repo_id` | Dataset identifier. `<your-username>/<dataset-name>` on the Hugging Face Hub; see "What to name each dataset's `repo_id`" above. |
-| `--dataset.single_task` | Task string stored with every frame in this recording session. For this project: `"Place at Position N"`, matching what `play_TicTacToe.py` sends at inference. |
-| `--dataset.num_episodes` | Number of episodes to record in this run. This project recorded 10 per grid cell. |
+| `--dataset.repo_id` | Dataset identifier. `<your-username>/<dataset-name>` on the Hugging Face Hub, the same value for all 9 sessions; see "One dataset, not nine" above. |
+| `--dataset.single_task` | Task string attached to every frame recorded in this session. Changes each of the 9 sessions: `"Place at Position N"`, matching what `play_TicTacToe.py` sends at inference. |
+| `--dataset.num_episodes` | Number of episodes to record in this session. This project recorded 10 per grid cell. |
+| `--resume` | `true` for the 2nd through 9th sessions, so this session's episodes append to the existing dataset at `repo_id` instead of trying to create a new one (which would fail, the repo already exists after session 1). Omit or `false` only for the very first session. |
 | `--dataset.root` | Local storage path, if not using the default cache location. Recording still pushes to the Hub unless `--dataset.push_to_hub=false` is also set. |
 
-Run this command once per grid cell (9 times total, `N` = 1 through 9),
-each time as a separate recording session with a different `single_task`
-string. Before recording each of the 10 episodes within one session,
-arrange the board's background pieces to match that demo's layout in
+Run one of the two commands above once per grid cell (9 times total).
+Before recording each of the 10 episodes within one session, arrange the
+board's background pieces to match that demo's layout in
 `08_dataset_90_boards.md`, then start the episode and teleoperate one
 pick-and-place of a Red/O tile into the target cell (see
 `03_dataset_and_training.md` for the full dataset design and piece
@@ -250,41 +304,26 @@ constraints).
 
 ## 4. Train
 
-You train **once**, not once per cell. Step 3 records one dataset per grid
-cell (9 separate `repo_id`s), but all 9 feed a single training run that
-produces one task-conditioned policy covering all 9 cells (see
-`06_act_configuration.md`, the task-instruction mechanism is what makes one
-policy handle all 9 positions). Training once per cell would defeat that
-and give you 9 separate, non-cell-aware policies instead.
+You train **once**. Step 3 now records all 9 cells into one single
+dataset (`repo_id`), so training points at that one dataset, no
+multi-dataset step needed. One training run over that dataset produces one
+task-conditioned policy covering all 9 cells (see `06_act_configuration.md`,
+the task-instruction mechanism is what makes one policy handle all 9
+positions from a single dataset containing all 9 tasks).
 
-`make_dataset()` (`TicTacToe_with_SO101/src/lerobot/datasets/factory.py`,
-line ~85) accepts a list of repo ids for `dataset.repo_id` and concatenates
-them automatically via `MultiLeRobotDataset`. To pass a list reliably (CLI
-flag quoting for a list is inconsistent across shells), use a YAML config
-file instead of a CLI flag for this one field. `python -m lerobot.scripts.train`
-supports `--config_path=<file>` (see `train.py`'s `@parser.wrap()`,
-`config_path` argument), which loads a YAML config, and any field can still
-be overridden or added on top of it as a normal `--flag=value` on the same
-command.
-
-`TicTacToe_with_SO101/train_config.yaml` in this repo is a ready-made
-template for exactly this:
+`python -m lerobot.scripts.train` supports `--config_path=<file>` (see
+`train.py`'s `@parser.wrap()`, `config_path` argument), which loads a YAML
+config; any field can still be overridden with a normal `--flag=value` on
+the same command. `TicTacToe_with_SO101/train_config.yaml` in this repo is
+a ready-made template:
 
 ```yaml
 dataset:
-  repo_id:
-    - your-username/tictactoe-position-1
-    - your-username/tictactoe-position-2
-    - your-username/tictactoe-position-3
-    - your-username/tictactoe-position-4
-    - your-username/tictactoe-position-5
-    - your-username/tictactoe-position-6
-    - your-username/tictactoe-position-7
-    - your-username/tictactoe-position-8
-    - your-username/tictactoe-position-9
+  repo_id: your-username/tictactoe
 policy:
   type: act_lang
   device: cuda
+  push_to_hub: false
 batch_size: 64
 steps: 25000
 save_freq: 5000
@@ -294,27 +333,35 @@ wandb:
   enable: true
 ```
 
-Edit the 9 `your-username/tictactoe-position-N` placeholders to your real
-repo ids from step 3, then run:
+Edit `dataset.repo_id` to the single dataset repo id from step 3, then run:
 
 ```bash
 python -m lerobot.scripts.train --config_path=train_config.yaml
 ```
 
-This is the definitive way to pass all 9 datasets in one run.
+`policy.push_to_hub: false` avoids
+`ValueError: 'policy.repo_id' argument missing`
+(`TicTacToe_with_SO101/src/lerobot/configs/train.py`, `validate()`, line
+~119): `PreTrainedConfig.push_to_hub` defaults to `True`, which requires a
+`policy.repo_id` to push the trained checkpoint to. Keeping it `false`
+just skips that Hub push; the checkpoint is still written locally to
+`output_dir`. Set `push_to_hub: true` and add a `repo_id:` under `policy:`
+instead if you do want the trained model auto-pushed to the Hub at the end
+of training.
 
 Key `TrainPipelineConfig` fields (`TicTacToe_with_SO101/src/lerobot/configs/train.py`):
 
 | Field | Meaning |
 |---|---|
-| `dataset.repo_id` | Dataset(s) to train on. List of the 9 repo ids from step 3, in the YAML config as shown above (see step 3, "What to name each dataset's `repo_id`", for what these strings actually are). |
+| `dataset.repo_id` | The single dataset from step 3, containing all 9 cells' episodes. |
 | `policy.type` | Policy class. Use `act_lang` for this project (see `06_act_configuration.md`). |
-| `--policy.<field>` | Any field on `ACTLangConfig` (layer counts, `dim_model`, optimizer learning rate, etc.), see `06_act_configuration.md` for the full list. |
-| `--batch_size` | This project used 64 (larger than ACT's typical default), which reduced the number of steps needed for convergence. |
-| `--steps` | This project used 25,000 (40 epochs). A checkpoint at 15,000 performed comparably. |
-| `--output_dir` | Where checkpoints are written. |
-| `--wandb.enable` | Enable Weights & Biases logging (requires `wandb login` once). |
-| `--resume` | Resume from `--output_dir`'s last checkpoint. |
+| `policy.push_to_hub` | Whether to push the trained checkpoint to the Hub automatically. `false` needs no `policy.repo_id`; `true` requires one (see above). |
+| `policy.<field>` | Any field on `ACTLangConfig` (layer counts, `dim_model`, optimizer learning rate, etc.), see `06_act_configuration.md` for the full list. |
+| `batch_size` | This project used 64 (larger than ACT's typical default), which reduced the number of steps needed for convergence. |
+| `steps` | This project used 25,000 (40 epochs). A checkpoint at 15,000 performed comparably. |
+| `output_dir` | Where checkpoints are written. |
+| `wandb.enable` | Enable Weights & Biases logging (requires `wandb login` once). |
+| `resume` | Resume from `output_dir`'s last checkpoint, if a training run was interrupted. |
 
 Checkpoints land in `<output_dir>/checkpoints/<step>/pretrained_model/`,
 containing `config.json`, `model.safetensors`, `train_config.json`.
@@ -376,10 +423,10 @@ def train():
 
 `train_config.yaml` is the same file described above
 (`TicTacToe_with_SO101/train_config.yaml`, already in the repo). The
-version Modal clones must have your real repo ids filled in, not the
-placeholders, so edit it and push the change before running `modal run`,
-or add a `run_commands` step in the image that overwrites it with your
-edited version.
+version Modal clones must have your real `dataset.repo_id` filled in, not
+the placeholder, so edit it and push the change before running
+`modal run`, or add a `run_commands` step in the image that overwrites it
+with your edited version.
 
 ### GPU choice and timing
 
