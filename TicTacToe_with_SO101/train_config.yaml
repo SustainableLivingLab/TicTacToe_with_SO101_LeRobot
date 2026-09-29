@@ -1,0 +1,21 @@
+dataset:
+  repo_id:
+    - your-username/tictactoe-position-1
+    - your-username/tictactoe-position-2
+    - your-username/tictactoe-position-3
+    - your-username/tictactoe-position-4
+    - your-username/tictactoe-position-5
+    - your-username/tictactoe-position-6
+    - your-username/tictactoe-position-7
+    - your-username/tictactoe-position-8
+    - your-username/tictactoe-position-9
+policy:
+  type: act_lang
+  device: cuda
+batch_size: 64
+steps: 25000
+save_freq: 5000
+output_dir: outputs/train/tictactoe_act_lang
+job_name: tictactoe_act_lang
+wandb:
+  enable: true
