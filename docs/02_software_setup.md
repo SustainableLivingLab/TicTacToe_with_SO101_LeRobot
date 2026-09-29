@@ -1,5 +1,22 @@
 # 02. Software Setup
 
+## Clone this repo
+
+This is not plain upstream LeRobot. `play_TicTacToe.py`, `board_generator.py`,
+`image_transformation_testing.py`, the `act_lang` policy variant, and every
+doc in this `docs/` folder exist only in this fork; they are not part of a
+plain `git clone` of `huggingface/lerobot`. Clone this repo specifically
+before doing anything else:
+
+```bash
+git clone https://github.com/SustainableLivingLab/TicTacToe_with_SO101_LeRobot.git
+cd TicTacToe_with_SO101_LeRobot/TicTacToe_with_SO101
+```
+
+All commands below assume you are inside that `TicTacToe_with_SO101`
+directory (the one containing this repo's `pyproject.toml`), not a separate
+plain-LeRobot clone.
+
 ## Base install
 
 Follow LeRobot's own installation guide first:
@@ -11,6 +28,28 @@ conda create -y -n lerobot python=3.10
 conda activate lerobot
 conda install ffmpeg -c conda-forge
 pip install -e .
+```
+
+`python=3.10` matches this repo's `pyproject.toml` (`requires-python = ">=3.10"`,
+`version = "0.2.0"`) at the time of writing. If `pip install -e .` reports a
+Python version conflict, check `requires-python` in your own checkout's
+`pyproject.toml` first; a different clone, fork, or a `pip install --upgrade`
+of lerobot itself can raise this constraint, and the conda env's Python
+version needs to satisfy whatever the checkout actually requires, not
+necessarily 3.10. On Windows, if `pip install -e .` tries to build `numpy`
+or `torch` from source (a `.tar.gz` download instead of a `.whl`, then a
+`meson`/compiler error), that also usually means the active Python version
+has no prebuilt wheel for those packages yet; recreate the env with the
+Python version the checkout's `pyproject.toml` actually asks for rather
+than installing a C compiler.
+
+If `conda install` hangs at `Solving environment:` for more than a minute or
+two, that is conda's classic solver stalling, not a network issue. Install
+the faster solver once and retry:
+
+```bash
+conda install -n base conda-libmamba-solver -c conda-forge
+conda install ffmpeg -c conda-forge --solver=libmamba
 ```
 
 For SO-101 motor communication, also install the Feetech extra:

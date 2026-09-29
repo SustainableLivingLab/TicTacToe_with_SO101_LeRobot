@@ -7,6 +7,16 @@ invocations; this repo has no installed CLI aliases (no `lerobot-record` /
 
 ## 1. Install
 
+Clone this repo first, not plain upstream LeRobot; the TicTacToe game loop,
+`act_lang` policy, and dataset-planning scripts exist only here:
+
+```bash
+git clone https://github.com/SustainableLivingLab/TicTacToe_with_SO101_LeRobot.git
+cd TicTacToe_with_SO101_LeRobot/TicTacToe_with_SO101
+```
+
+Run every command below from inside that `TicTacToe_with_SO101` directory.
+
 ```bash
 conda create -y -n lerobot python=3.10
 conda activate lerobot
@@ -14,6 +24,12 @@ conda install ffmpeg -c conda-forge
 pip install -e .
 pip install -e ".[feetech]"   # STS3215 motor communication for SO-101
 ```
+
+If `conda install` hangs at `Solving environment:` for more than a minute,
+see `02_software_setup.md` for the libmamba solver fix. If `pip install -e .`
+tries to compile `numpy` or `torch` from source instead of using a prebuilt
+wheel, that usually means the active Python version does not match this
+repo's `pyproject.toml` `requires-python`; see `02_software_setup.md`.
 
 Project-specific extras (Gemini vision client, if not already pulled in by
 `pyproject.toml`):
