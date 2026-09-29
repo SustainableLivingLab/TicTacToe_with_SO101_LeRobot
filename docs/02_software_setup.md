@@ -19,29 +19,26 @@ plain-LeRobot clone.
 
 ## Base install
 
-Follow LeRobot's own installation guide first:
-`TicTacToe_with_SO101/docs/source/installation.mdx` (or the upstream docs at
-https://huggingface.co/docs/lerobot). Summary:
+LeRobot's own installation guide
+(`TicTacToe_with_SO101/docs/source/installation.mdx`, or the upstream docs
+at https://huggingface.co/docs/lerobot) shows `python=3.10`. Ignore that
+number; this repo's `pyproject.toml` requires `>=3.12`. Use the version
+shown below, not the upstream guide's:
 
 ```bash
-conda create -y -n lerobot python=3.10
+conda create -y -n lerobot python=3.12
 conda activate lerobot
 conda install ffmpeg -c conda-forge
 pip install -e .
 ```
 
-`python=3.10` matches this repo's `pyproject.toml` (`requires-python = ">=3.10"`,
-`version = "0.2.0"`) at the time of writing. If `pip install -e .` reports a
-Python version conflict, check `requires-python` in your own checkout's
-`pyproject.toml` first; a different clone, fork, or a `pip install --upgrade`
-of lerobot itself can raise this constraint, and the conda env's Python
-version needs to satisfy whatever the checkout actually requires, not
-necessarily 3.10. On Windows, if `pip install -e .` tries to build `numpy`
-or `torch` from source (a `.tar.gz` download instead of a `.whl`, then a
-`meson`/compiler error), that also usually means the active Python version
-has no prebuilt wheel for those packages yet; recreate the env with the
-Python version the checkout's `pyproject.toml` actually asks for rather
-than installing a C compiler.
+Use Python 3.12. If `pip install -e .` errors with a Python version
+conflict, you are not inside this repo's `TicTacToe_with_SO101` directory;
+see "Clone this repo" above. On Windows, if `pip install -e .` tries to
+build `numpy` or `torch` from source (a `.tar.gz` download instead of a
+`.whl`, followed by a `meson`/compiler error) instead of failing with a
+version conflict, delete the conda env and recreate it with
+`python=3.12` exactly as shown above, rather than installing a C compiler.
 
 If `conda install` hangs at `Solving environment:` for more than a minute or
 two, that is conda's classic solver stalling, not a network issue. Install
