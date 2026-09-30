@@ -1,5 +1,6 @@
 dataset:
   repo_id: IndiaTechTeamSL2/tictactoe-v2_1
+  video_backend: pyav
 policy:
   type: act_lang
   device: cuda
