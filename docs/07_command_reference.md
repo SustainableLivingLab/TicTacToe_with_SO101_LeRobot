@@ -388,84 +388,97 @@ Key `TrainPipelineConfig` fields (`TicTacToe_with_SO101/src/lerobot/configs/trai
 Checkpoints land in `<output_dir>/checkpoints/<step>/pretrained_model/`,
 containing `config.json`, `model.safetensors`, `train_config.json`.
 
-### Training without a local GPU (Modal)
+### Training without a local GPU (Hugging Face Jobs)
 
 `python -m lerobot.scripts.train` is local compute; it does not run in the
 cloud by itself. If you have no local GPU, run the exact same command on a
-rented GPU via [Modal](https://modal.com/docs/guide) instead of your own
-machine.
+rented GPU via [Hugging Face Jobs](https://huggingface.co/docs/huggingface_hub/guides/jobs)
+instead of your own machine. Since the dataset already lives on the Hub,
+this keeps everything (data, compute, and the trained model) inside
+Hugging Face, no other cloud account needed.
 
-Install and authenticate Modal locally first (this only submits the job,
-Modal runs the training itself):
+Upstream lerobot has its own simpler flag for this, `lerobot-train
+--job.target=<flavor>`, which submits a job without any manual `git
+clone` step. **This project cannot use that flag.** It runs against HF's
+own lerobot runtime image, which only has stock policy types; this
+project's policy, `--policy.type=act_lang`, is custom code that exists
+only in this fork's `TicTacToe_with_SO101/src/lerobot/policies/act/`, not
+in any pip-installed lerobot. The approach below installs this fork's
+actual code inside the job first, specifically so `act_lang` is available
+to train with.
+
+Install the `hf` CLI locally first (this only submits the job, Hugging
+Face runs the training itself), and make sure you're logged in:
 
 ```bash
-pip install modal
-modal setup
+pip install -U "huggingface_hub[cli]"
+huggingface-cli login
 ```
 
-Create `modal_train.py` in the repo root:
+Jobs need a positive credit balance on the account or organization
+running them; see https://huggingface.co/docs/hub/jobs-pricing and
+https://huggingface.co/settings/billing.
 
-```python
-import modal
+Run the job directly from the CLI, no separate script file needed. This
+clones the repo, installs it, and runs training in one container:
 
-app = modal.App("tictactoe-train")
-
-image = (
-    modal.Image.debian_slim(python_version="3.12")
-    .apt_install("git", "ffmpeg")
-    .run_commands(
-        "git clone https://github.com/SustainableLivingLab/TicTacToe_with_SO101_LeRobot.git /repo"
-    )
-    .workdir("/repo/TicTacToe_with_SO101")
-    .run_commands("pip install -e .")
-)
-
-checkpoints = modal.Volume.from_name("tictactoe-checkpoints", create_if_missing=True)
-
-@app.function(
-    image=image,
-    gpu="A10G",
-    volumes={"/checkpoints": checkpoints},
-    timeout=6 * 60 * 60,
-    secrets=[modal.Secret.from_name("huggingface-secret")],
-)
-def train():
-    import subprocess
-
-    subprocess.run(
-        [
-            "python", "-m", "lerobot.scripts.train",
-            "--config_path=train_config.yaml",
-            "--output_dir=/checkpoints/tictactoe_act_lang",
-        ],
-        check=True,
-    )
-    checkpoints.commit()
+```bash
+hf jobs run \
+    --flavor a10g-large \
+    --timeout 6h \
+    --secrets HF_TOKEN \
+    pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel \
+    bash -c "
+        git clone https://github.com/SustainableLivingLab/TicTacToe_with_SO101_LeRobot.git /repo &&
+        cd /repo/TicTacToe_with_SO101 &&
+        pip install -e . &&
+        python -m lerobot.scripts.train --config_path=train_config.yaml
+    "
 ```
 
 `train_config.yaml` is the same file described above
-(`TicTacToe_with_SO101/train_config.yaml`, already in the repo). The
-version Modal clones must have your real `dataset.repo_id` filled in, not
-the placeholder, so edit it and push the change before running
-`modal run`, or add a `run_commands` step in the image that overwrites it
-with your edited version.
+(`TicTacToe_with_SO101/train_config.yaml`, already in the repo). The job
+clones the repo fresh from GitHub every time it runs, so it only ever sees
+whatever is currently pushed to `main`, never a local, unpushed edit on
+your own machine. **If you change `train_config.yaml` (for example, to set
+`push_to_hub`, see below, or to lower `steps`), commit and push that
+change before running `hf jobs run`,** or the job will train against the
+old version of the file. To confirm what the job will actually use before
+running it, check
+https://github.com/SustainableLivingLab/TicTacToe_with_SO101_LeRobot/blob/main/TicTacToe_with_SO101/train_config.yaml
+in a browser.
+
+If you'd rather not edit and push the file at all, add a normal
+`--flag=value` override at the end of the
+`python -m lerobot.scripts.train` line inside the `bash -c "..."` block
+instead, same as running it locally; a CLI override always takes priority
+over whatever is in the file.
+
+`--secrets HF_TOKEN` passes your logged-in Hugging Face token into the job
+as an environment variable, needed to pull the dataset (and to push the
+trained model, see below). It is encrypted server-side, not visible in
+logs.
 
 ### GPU choice and timing
 
-`gpu="A10G"` in the script above is one option among several Modal offers;
-change this string to switch GPU tier. At the default 25,000 steps,
-batch size 64 (this project's own settings, see step 4's config table),
-one real run on A10G took about 4 hours. A100 and H100 are faster per step
-but do not reduce total time enough to fit a short session; going from
-A10G to A100 to H100 is roughly a 1.5-2x speedup each step, not 10x, so a
-~4 hour A10G run is still well over an hour even on H100. If you are
-time-boxed (for example, a 2-3 hour workshop where students record data
-and train live), the effective lever is `steps`, not GPU tier; see "Faster
-training for a time-boxed session" below. Real per-second Modal GPU rates
-as of this writing: A10 (`gpu="A10G"`) about $1.10/hr, A100 80GB
-(`gpu="A100"`) about $2.50/hr, H100 (`gpu="H100"`) about $3.95/hr,
-significantly more if you pin a specific region. New Modal accounts get
-free starting credit, check https://modal.com/pricing for current terms.
+`--flavor a10g-large` in the command above is one option among many; see
+the full table at
+https://huggingface.co/docs/huggingface_hub/guides/jobs#select-the-hardware
+(or run `hf jobs hardware` for the live list with current prices). At the
+default 25,000 steps, batch size 64 (this project's own settings, see step
+4's config table), a comparable A10G-class GPU run took about 4 hours in
+practice (measured on a different cloud GPU provider, not HF Jobs
+specifically, but the same GPU class). A100 and H100 flavors are faster
+per step but do not reduce total time enough to fit a short session; going
+from A10G to A100 to H100 is roughly a 1.5-2x speedup each step, not 10x,
+so a ~4 hour A10G-class run is still well over an hour even on H200. If
+you are time-boxed (for example, a 2-3 hour workshop where students record
+data and train live), the effective lever is `steps`, not GPU tier; see
+"Faster training for a time-boxed session" below. Real HF Jobs hourly
+rates as of this writing: `a10g-large` $1.50/hr, `a100-large` $2.50/hr,
+`h200` $5.00/hr; billing is per-second, so you only pay for what you use.
+Jobs have a default 30-minute timeout, `--timeout 6h` above overrides that
+for a long training run; adjust to your actual expected duration.
 
 ### Faster training for a time-boxed session
 
@@ -479,33 +492,55 @@ it as an unverified tradeoff, more likely to produce a visibly weaker
 policy the further you drop, not a guaranteed-safe shortcut. If a session
 is hard-capped at a specific duration, the reliable approach is to
 estimate from a known data point (this project's own ~4 hours for 25,000
-steps on A10G) rather than assume any GPU tier alone reaches a target time.
+steps on an A10G-class GPU) rather than assume any GPU tier alone reaches
+a target time.
 
-`modal.Secret.from_name("huggingface-secret")` needs a Modal secret holding
-your `HF_TOKEN`, created once via the Modal dashboard or
-`modal secret create huggingface-secret HF_TOKEN=<your token>`, since the
-dataset pull from Hugging Face Hub needs authentication the same way it
-would locally.
+### Getting the trained checkpoint onto the Hub
 
-Run it:
+The cleanest way to have the trained model "sit in Hugging Face properly"
+is to have the job itself push it to the Hub when training finishes,
+instead of downloading it and re-uploading separately. Edit
+`train_config.yaml` to add this, then commit and push the change (see the
+reminder above: the job only sees what is actually pushed to `main`)
+before running `hf jobs run`:
 
-```bash
-modal run modal_train.py
+```yaml
+policy:
+  type: act_lang
+  device: cuda
+  push_to_hub: true
+  repo_id: IndiaTechTeamSL2/tictactoe-act-lang
 ```
 
-`--output_dir=/checkpoints/tictactoe_act_lang` writes checkpoints into the
-Modal Volume (`checkpoints.commit()` persists them after the run), not into
-the container's throwaway local disk. Download the trained checkpoint back
-to whatever machine will run inference:
+(See "What `ValueError: 'policy.repo_id' argument missing` means" above
+for why both fields are needed together.) With this set, training uploads
+the final checkpoint to `https://huggingface.co/IndiaTechTeamSL2/tictactoe-act-lang`
+automatically, no manual step after the job completes. The `HF_TOKEN`
+secret already passed into the job (see above) needs write access to that
+`repo_id`'s namespace for the push to succeed.
+
+If you'd rather review the checkpoint before publishing it, leave
+`push_to_hub: false` (the repo's default), and retrieve it after the job
+completes by mounting a Hub dataset repo as a writable volume for the
+job's `output_dir`, or by having the job's command run
+`huggingface-cli upload` as an explicit last step instead of relying on
+`policy.push_to_hub`. Either way, once the checkpoint is a Hub repo id,
+point `--policy.path=IndiaTechTeamSL2/tictactoe-act-lang` at it in the
+inference command (step 6), same as any other cloud-trained checkpoint.
+
+When `hf jobs run` starts, it prints a job URL and job ID in the terminal;
+that URL is a browser page showing live logs and status, the simplest way
+to watch training progress. To check on it later from a new terminal
+instead, first list your jobs to find the id, then view that job's logs:
 
 ```bash
-modal volume get tictactoe-checkpoints tictactoe_act_lang/checkpoints/last/pretrained_model ./pretrained_model
+hf jobs ls
+hf jobs logs <job_id>
 ```
 
-Then point `--policy.path=./pretrained_model` at that downloaded folder in
-the inference command (step 6), or `huggingface-cli upload` it to the Hub
-and reference the Hub repo id instead, same as any other cloud-trained
-checkpoint (see step 6's note on this).
+`<job_id>` is the id shown in the `hf jobs ls` output (also visible at the
+end of the URL printed when the job started), not a value you choose
+yourself.
 
 ## 5. Evaluate a checkpoint (no physical robot)
 
@@ -554,19 +589,19 @@ automatically the same machine training ran on. Two concrete options:
 - **Local path**, if you copied or downloaded the checkpoint folder onto
   this machine, e.g.
   `--policy.path=outputs/train/tictactoe_act_lang/checkpoints/last/pretrained_model`
-  (matches `--output_dir=` from step 4) or, for the Modal path from step 4,
-  wherever you ran `modal volume get` to, e.g.
-  `--policy.path=./pretrained_model`.
-- **Hugging Face Hub repo id**, if you uploaded the checkpoint with
-  `huggingface-cli upload` (see step 4, "Upload policy checkpoints" link),
-  e.g. `--policy.path=your-username/tictactoe-act-lang`. This downloads the
+  (matches `--output_dir=` from step 4).
+- **Hugging Face Hub repo id**, if the checkpoint was pushed to the Hub,
+  either automatically by a Hugging Face Jobs training run (see step 4,
+  "Getting the trained checkpoint onto the Hub") or manually with
+  `huggingface-cli upload`, e.g.
+  `--policy.path=IndiaTechTeamSL2/tictactoe-act-lang`. This downloads the
   checkpoint automatically; no manual file transfer needed.
 
 Training (step 4) is local compute by default; it does not run in the
-cloud unless you explicitly run it on a rented GPU or Modal (see step 4,
-"Training without a local GPU (Modal)"). Either way, the checkpoint has to
-reach the robot machine one of the two ways above before this command can
-use it.
+cloud unless you explicitly run it on a rented GPU or via Hugging Face
+Jobs (see step 4, "Training without a local GPU (Hugging Face Jobs)").
+Either way, the checkpoint has to reach the robot machine one of the two
+ways above before this command can use it.
 
 Before running: place the physical board with the human's first X already
 placed (see `03_dataset_and_training.md`, "Turn assignment", the script does
