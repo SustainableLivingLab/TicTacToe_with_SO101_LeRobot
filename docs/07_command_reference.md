@@ -341,8 +341,19 @@ save_freq: 5000
 output_dir: outputs/train/tictactoe_act_lang
 job_name: tictactoe_act_lang
 wandb:
-  enable: true
+  enable: false
 ```
+
+`wandb.enable: false` by default. Weights & Biases needs `wandb login` to
+have already run (with a real API key) in whatever environment actually
+executes training. On a remote Hugging Face Job, that means logging in
+inside the job's container before training starts, which the command in
+this doc does not currently do; if you set `wandb.enable: true` without
+adding that step, training fails immediately with
+`wandb.errors.errors.UsageError: No API key configured` the moment it
+tries to initialize logging, after the (potentially slow) install step
+already completed. Leave it `false` unless you've actually wired up W&B
+auth inside the job.
 
 Edit `dataset.repo_id` to the single dataset repo id from step 3, then run:
 
@@ -429,12 +440,52 @@ hf jobs run \
     --secrets HF_TOKEN \
     pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel \
     bash -c "
+        apt-get update && apt-get install -y git &&
         git clone https://github.com/SustainableLivingLab/TicTacToe_with_SO101_LeRobot.git /repo &&
+        conda create -y -n lerobot python=3.12 &&
+        source activate lerobot &&
         cd /repo/TicTacToe_with_SO101 &&
         pip install -e . &&
         python -m lerobot.scripts.train --config_path=train_config.yaml
     "
 ```
+
+Two fixes bundled into this command, both found by actually running it, not
+guessed in advance:
+
+- The `pytorch/pytorch:*-devel` base image does not include `git`;
+  `apt-get install -y git` installs it first. Omitting this step fails
+  immediately with `git: command not found` (exit code 127), before any
+  training compute is used.
+- The same base image ships **Python 3.11**, but this repo's
+  `pyproject.toml` requires `>=3.12` (see `02_software_setup.md`). Without
+  the `conda create`/`source activate` step, `pip install -e .` fails with
+  `ERROR: Package 'lerobot' requires a different Python: 3.11.11 not in
+  '>=3.12'`, again before any training compute is used. The image does
+  already have `conda` available (used by the base PyTorch install), so
+  creating a 3.12 env inline is the same fix as the local install steps in
+  `02_software_setup.md`, just run once per job instead of once per
+  machine.
+
+Both failures above are cheap: they happen during setup, in well under a
+minute, not after hours of training, so hitting either one wastes very
+little compute time or money.
+
+One more failure mode, this one **local, not remote**: on Windows, a
+non-detached `hf jobs run` can crash your own terminal with `Error:
+Invalid value. 'charmap' codec can't encode characters in position...`
+partway through streaming the job's logs (some pip/conda output includes
+characters Windows' default terminal encoding cannot print). This is a
+local display crash, not a job failure; the remote job keeps running
+unaffected. Check `hf jobs ls` to see its real status rather than assuming
+it failed. To avoid the crash entirely, set UTF-8 output encoding before
+running the command:
+
+```bash
+export PYTHONIOENCODING=utf-8
+```
+
+(On Windows PowerShell: `$env:PYTHONIOENCODING = "utf-8"`.)
 
 `train_config.yaml` is the same file described above
 (`TicTacToe_with_SO101/train_config.yaml`, already in the repo). The job
