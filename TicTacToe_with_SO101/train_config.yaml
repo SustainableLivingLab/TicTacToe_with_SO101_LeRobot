@@ -1,5 +1,5 @@
 dataset:
-  repo_id: IndiaTechTeamSL2/tictactoe
+  repo_id: IndiaTechTeamSL2/tictactoe-v2_1
 policy:
   type: act_lang
   device: cuda

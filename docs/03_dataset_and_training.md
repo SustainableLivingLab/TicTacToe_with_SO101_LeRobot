@@ -182,18 +182,51 @@ This fork's dataset code cannot read that at all; loading it raises
 wall when it tries to merge such datasets using this fork's own
 environment.
 
-If you hit this, `TicTacToe_with_SO101/export_dataset_to_v2_1.py` (in this
-repo) re-exports a newer-format dataset into this fork's older `v2.1`
-format, so this fork's own training code can actually read it. Read the
-script's own docstring before running it; the mechanism is two separate
-steps in two separate Python environments (`--mode=read` in a fresh,
-newer-lerobot venv, `--mode=write` in this fork's own venv), since the two
-lerobot versions' dataset APIs are not compatible enough to both run in one
-environment. Verified working end to end against this project's own
-merged 90-episode dataset.
+If you hit this, `TicTacToe_with_SO101/export_dataset_to_v2_1.py` plus
+`TicTacToe_with_SO101/export_orchestrate.py` (both in this repo) re-export
+a newer-format dataset into this fork's older `v2.1` format, so this
+fork's own training code can actually read it. Read
+`export_orchestrate.py`'s own docstring before running it, that is the
+script you actually invoke; it drives `export_dataset_to_v2_1.py` one
+episode at a time, alternating between two Python venvs (a fresh,
+newer-lerobot venv to read, this fork's own venv to write), since the two
+lerobot versions' dataset APIs are not compatible enough to both run in
+one process. Verified working end to end against this project's own real
+90-episode, 85,408-frame dataset, including a full reload through this
+fork's own training-path `LeRobotDataset` afterward.
 
-Two real bugs were found and fixed while building and testing this
-export, both are dependency-version drift, not bugs in the data itself:
+Porting was considered a second time even after building the orchestrator,
+given the amount of dependency-drift friction encountered (see the bug
+list below); it was ruled out again for the same reason as the first time
+(the newer `PreTrainedPolicy` contract, predict_action_chunk/select_action
+split, external processor-based normalization) being genuinely larger,
+riskier work than fixing the export path.
+
+**Do not use a single big pickle file, and do not stage the whole dataset
+on disk before writing anything.** Two earlier, simpler designs for this
+export were tried and rejected during actual testing, not by inspection:
+
+- Reading the entire dataset into one in-memory Python object before
+  writing anything grew past 18GB of RAM within a few minutes on this
+  project's own dataset and was still climbing when killed.
+- Reading every episode into its own pickle file, then writing them all
+  in a second pass, needed roughly 1.8GB of raw pickle per episode, about
+  164GB total for 90 episodes, more disk than was available on any drive
+  on the machine this was built on (confirmed by actually running out of
+  disk space partway through).
+
+`export_orchestrate.py`'s actual design processes one episode fully (read,
+write into the growing local v2.1 dataset, delete the one intermediate
+pickle) before starting the next, so disk usage stays at roughly one
+episode's raw pickle (a few GB) plus the growing local dataset, which is
+video-encoded and therefore much smaller (roughly 3GB total for 90
+episodes, not 164GB). It also writes a resume-state file, so an
+interrupted run can be restarted with the same command and picks up from
+the last completed episode instead of starting over.
+
+Several real bugs were found and fixed while building and testing this,
+all dependency-version drift between this fork's pinned lerobot and the
+newer one used for reading, not bugs in the source data itself:
 
 - `LeRobotDatasetMetadata`/`get_safe_version()` requires the source Hub
   dataset repo to have a version tag matching its `info.json`
@@ -214,3 +247,12 @@ export, both are dependency-version drift, not bugs in the data itself:
   fix this same testing surfaced
   (`torchvision.io.VideoReader` removal, unrelated to this bug but found
   in the same investigation).
+- This fork's `validate_frame()` compares a written frame's
+  `numpy_array.shape` (always a tuple) against the feature schema's
+  recorded `shape` value with a strict `!=` comparison, not just a value
+  comparison. A shape read from a JSON manifest (as this export does, to
+  pass data between the two venvs) comes back as a list, not a tuple, and
+  fails validation on every single frame with `does not have the expected
+  shape` even though the numbers match. Fix: convert `shape` back to a
+  tuple explicitly after loading it from JSON, before passing it to
+  `LeRobotDataset.create()`.
