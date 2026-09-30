@@ -98,42 +98,42 @@ def decode_video_frames_torchvision(
     """
     video_path = str(video_path)
 
-    # set backend
-    keyframes_only = False
-    torchvision.set_video_backend(backend)
-    if backend == "pyav":
-        keyframes_only = True  # pyav doesn't support accurate seek
-
-    # set a video stream reader
-    # TODO(rcadene): also load audio stream at the same time
-    reader = torchvision.io.VideoReader(video_path, "video")
+    # NOTE: torchvision.io.VideoReader was removed in newer torchvision
+    # releases (it existed only as a thin wrapper around PyAV). This
+    # function now calls PyAV directly instead, keeping the same
+    # seek/timestamp-matching behavior as the original implementation.
+    # keyframes_only=True below matches the original code's note that
+    # "pyav doesn't support accurate seek".
 
     # set the first and last requested timestamps
     # Note: previous timestamps are usually loaded, since we need to access the previous key frame
     first_ts = min(timestamps)
     last_ts = max(timestamps)
 
+    container = av.open(video_path)
+    stream = container.streams.video[0]
+    stream.thread_type = "AUTO"
+    time_base = float(stream.time_base)
+
     # access closest key frame of the first requested frame
     # Note: closest key frame timestamp is usually smaller than `first_ts` (e.g. key frame can be the first frame of the video)
     # for details on what `seek` is doing see: https://pyav.basswood-io.com/docs/stable/api/container.html?highlight=inputcontainer#av.container.InputContainer.seek
-    reader.seek(first_ts, keyframes_only=keyframes_only)
+    container.seek(int(first_ts / time_base), backward=True, any_frame=False, stream=stream)
 
     # load all frames until last requested frame
     loaded_frames = []
     loaded_ts = []
-    for frame in reader:
-        current_ts = frame["pts"]
+    for av_frame in container.decode(stream):
+        current_ts = float(av_frame.pts * time_base)
         if log_loaded_timestamps:
             logging.info(f"frame loaded at timestamp={current_ts:.4f}")
-        loaded_frames.append(frame["data"])
+        frame_data = torch.from_numpy(av_frame.to_ndarray(format="rgb24")).permute(2, 0, 1)
+        loaded_frames.append(frame_data)
         loaded_ts.append(current_ts)
         if current_ts >= last_ts:
             break
 
-    if backend == "pyav":
-        reader.container.close()
-
-    reader = None
+    container.close()
 
     query_ts = torch.tensor(timestamps)
     loaded_ts = torch.tensor(loaded_ts)
@@ -416,7 +416,10 @@ def get_video_info(video_path: Path | str) -> dict:
         video_info["video.is_depth_map"] = False
 
         # Calculate fps from r_frame_rate
-        video_info["video.fps"] = int(video_stream.base_rate)
+        # int() fails directly on newer PyAV's av.AVRational (>= ~15); float()
+        # works since AVRational implements __float__, then round to match the
+        # original int-fps behavior.
+        video_info["video.fps"] = round(float(video_stream.base_rate))
 
         pixel_channels = get_video_pixel_channels(video_stream.pix_fmt)
         video_info["video.channels"] = pixel_channels

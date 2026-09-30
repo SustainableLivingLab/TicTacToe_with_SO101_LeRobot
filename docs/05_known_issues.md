@@ -2,6 +2,20 @@
 
 ## Fixed
 
+- `decode_video_frames_torchvision()`
+  (`TicTacToe_with_SO101/src/lerobot/datasets/video_utils.py`) called
+  `torchvision.io.VideoReader`, which was removed entirely in newer
+  torchvision releases (confirmed on `torchvision==0.29.0`: `pyav` is the
+  only viable decode backend on Windows in this fork, since `torchcodec` is
+  conditionally excluded on `sys_platform == 'win32'` in `pyproject.toml`,
+  and the `video_reader` backend never worked without a from-source
+  torchvision build). Every dataset load that actually reads a video frame,
+  training included, crashed with `AttributeError: module 'torchvision.io'
+  has no attribute 'VideoReader'`. Rewritten to call PyAV (`av`) directly
+  instead of through torchvision's removed wrapper, producing the same
+  uint8, channel-first frame tensors the rest of the pipeline expects.
+  Found and fixed while testing the dataset format re-export described in
+  `03_dataset_and_training.md`.
 - Duplicate import of `hw_to_dataset_features` and `make_robot_from_config`
   in `play_TicTacToe.py`. Removed the redundant `lerobot.record` import;
   both are now imported once each.

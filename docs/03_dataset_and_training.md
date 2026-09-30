@@ -165,3 +165,52 @@ background) across episodes while keeping the task-relevant signal (where
 each cell actually is, relative to the camera) the thing the model has to
 learn to track visually. That is a larger, separate recording effort and is
 out of scope for the current 90-episode dataset.
+
+## If your dataset was recorded with a different lerobot version
+
+This repo's `pyproject.toml` pins `lerobot==0.2.0`, which reads and writes
+the dataset format tagged `v2.1` internally
+(`CODEBASE_VERSION` in `TicTacToe_with_SO101/src/lerobot/datasets/lerobot_dataset.py`).
+A dataset recorded with any other lerobot install, including a fresh `pip
+install lerobot` or a GUI tool built on top of lerobot such as
+[LeLab](https://github.com/nicolas-rabault/leLab) (see
+`01_hardware_setup.md`, "Calibrating via LeLab instead of the CLI"), is
+very likely saved in a newer format (`v3.0` or later as of this writing).
+This fork's dataset code cannot read that at all; loading it raises
+`ForwardCompatibilityError` immediately, and `merge_datasets.py` (see
+`08_dataset_90_boards.md` and `07_command_reference.md`) hits the same
+wall when it tries to merge such datasets using this fork's own
+environment.
+
+If you hit this, `TicTacToe_with_SO101/export_dataset_to_v2_1.py` (in this
+repo) re-exports a newer-format dataset into this fork's older `v2.1`
+format, so this fork's own training code can actually read it. Read the
+script's own docstring before running it; the mechanism is two separate
+steps in two separate Python environments (`--mode=read` in a fresh,
+newer-lerobot venv, `--mode=write` in this fork's own venv), since the two
+lerobot versions' dataset APIs are not compatible enough to both run in one
+environment. Verified working end to end against this project's own
+merged 90-episode dataset.
+
+Two real bugs were found and fixed while building and testing this
+export, both are dependency-version drift, not bugs in the data itself:
+
+- `LeRobotDatasetMetadata`/`get_safe_version()` requires the source Hub
+  dataset repo to have a version tag matching its `info.json`
+  `codebase_version` field. A dataset merged or pushed by a newer lerobot
+  install may not have this tag at all, raising
+  `RuntimeError: Your dataset must be tagged with a codebase version.`
+  Fix: read the real `codebase_version` from the dataset's
+  `meta/info.json` (do not guess it), then create that exact tag with
+  `HfApi().create_tag(repo_id, tag=<that version>, repo_type="dataset")`
+  once, before reading the dataset.
+- `get_video_info()`
+  (`TicTacToe_with_SO101/src/lerobot/datasets/video_utils.py`) called
+  `int(video_stream.base_rate)` on a PyAV stream object; newer PyAV
+  (confirmed on `av==19.0.0`) returns an `av.AVRational` there instead of a
+  plain number, which `int()` cannot convert directly. Fixed to
+  `round(float(video_stream.base_rate))`, since `AVRational` supports
+  `float()`. See `05_known_issues.md` for the other, separate video-decode
+  fix this same testing surfaced
+  (`torchvision.io.VideoReader` removal, unrelated to this bug but found
+  in the same investigation).
