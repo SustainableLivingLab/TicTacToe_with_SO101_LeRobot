@@ -3,7 +3,8 @@ dataset:
 policy:
   type: act_lang
   device: cuda
-  push_to_hub: false
+  push_to_hub: true
+  repo_id: IndiaTechTeamSL2/tictactoe-act-lang
 batch_size: 64
 steps: 25000
 save_freq: 5000
