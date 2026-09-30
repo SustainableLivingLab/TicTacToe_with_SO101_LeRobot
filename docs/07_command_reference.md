@@ -41,7 +41,7 @@ it first appears, but this is the plain-language version up front.
   and later when running inference, since the trained policy expects
   observations under those specific names.
 
-- **`--dataset.repo_id=`** (e.g. `melissa/tictactoe-position-3`): the name
+- **`--dataset.repo_id=`** (e.g. `your-username/tictactoe-position-3`): the name
   of a dataset on the Hugging Face Hub, in the form
   `<your-huggingface-username>/<dataset-name>`. You do not need to create
   this on huggingface.co first, recording creates it automatically. See
@@ -170,10 +170,21 @@ all land in the same dataset.
 the earlier, incorrect version of this doc), you do not need to re-record.
 `TicTacToe_with_SO101/merge_datasets.py`, included in this repo, downloads
 all 9 existing dataset repos and merges them into one new dataset repo you
-can point `train_config.yaml` at. Read the script's own docstring before
-running it, it includes a required small test-run step first. Compiles
-correctly but has not been run against real data by anyone yet; test on a
-small slice before trusting it with your full recorded data.
+can point `train_config.yaml` at. Verified working against real recorded
+data (9 real datasets, 90 episodes). Read the script's own docstring
+before running it, in particular the note on running it with a *newer*
+lerobot install (its own venv, `pip install "lerobot[dataset]"`), not this
+repo's own forked lerobot, since this repo's fork cannot read dataset
+format v3.0 (see the docstring for the exact `ForwardCompatibilityError`
+this causes if run in the wrong environment). It also includes a required
+small test-run step first, always do that before the full merge.
+
+If your source datasets' task strings do not already match the
+`"Place at Position N"` format `play_TicTacToe.py` sends at inference (for
+example, if they were recorded as `"tictactoe-position-N"` by a tool like
+LeLab), pass `--rewrite-task auto-position` to have the script rewrite
+each episode's task string to the correct format automatically as part of
+the merge.
 
 `--dataset.repo_id=<your-username>/tictactoe` has two parts:
 
@@ -185,10 +196,10 @@ small slice before trusting it with your full recorded data.
   reuse the exact same `repo_id` across all 9 recording sessions; do not
   vary it per cell.
 
-Concretely: if your Hugging Face username is `melissa`, every one of the 9
-recording sessions uses `--dataset.repo_id=melissa/tictactoe`, and that
+Concretely: if your Hugging Face username is `alex`, every one of the 9
+recording sessions uses `--dataset.repo_id=alex/tictactoe`, and that
 becomes one dataset repo at
-`https://huggingface.co/datasets/melissa/tictactoe` holding all 90
+`https://huggingface.co/datasets/alex/tictactoe` holding all 90
 episodes once the 9th session finishes and pushes.
 
 ### Recording command
@@ -548,7 +559,7 @@ automatically the same machine training ran on. Two concrete options:
   `--policy.path=./pretrained_model`.
 - **Hugging Face Hub repo id**, if you uploaded the checkpoint with
   `huggingface-cli upload` (see step 4, "Upload policy checkpoints" link),
-  e.g. `--policy.path=melissa/tictactoe-act-lang`. This downloads the
+  e.g. `--policy.path=your-username/tictactoe-act-lang`. This downloads the
   checkpoint automatically; no manual file transfer needed.
 
 Training (step 4) is local compute by default; it does not run in the

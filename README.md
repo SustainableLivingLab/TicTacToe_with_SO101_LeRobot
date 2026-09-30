@@ -38,6 +38,8 @@ Full documentation is in `docs/`:
 - `docs/07_command_reference.md`: every command from install to inference.
 - `docs/08_dataset_90_boards.md`: all 90 board layouts for the recording
   session, one per demo.
+- `docs/09_concept_overview_for_students.md`: the whole project explained
+  in simple English, no code, for teaching or onboarding new students.
 
 Read `docs/00_overview.md` first.
 

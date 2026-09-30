@@ -86,3 +86,5 @@ for why the training data reflects this.
   order.
 - `08_dataset_90_boards.md`: all 90 board layouts for the recording session,
   rendered as 3x3 grids, one per demo.
+- `09_concept_overview_for_students.md`: the whole project explained in
+  simple English, no code, for teaching or onboarding new students.
