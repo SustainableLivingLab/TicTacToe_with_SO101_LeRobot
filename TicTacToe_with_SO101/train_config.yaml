@@ -11,4 +11,4 @@ save_freq: 5000
 output_dir: outputs/train/tictactoe_act_lang
 job_name: tictactoe_act_lang
 wandb:
-  enable: true
+  enable: false
