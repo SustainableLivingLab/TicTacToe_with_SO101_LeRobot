@@ -112,7 +112,16 @@ def decode_video_frames_torchvision(
 
     container = av.open(video_path)
     stream = container.streams.video[0]
-    stream.thread_type = "AUTO"
+    # NOTE: thread_type="AUTO" lets PyAV/libdav1d spawn one decode thread per
+    # CPU core, per DataLoader worker. With several workers each opening their
+    # own multithreaded decoder, this can exhaust the container's OS thread/PID
+    # limit (cgroup pids.max), which libdav1d surfaces as
+    # `av.error.MemoryError: Cannot allocate memory: 'avcodec_open2(...)'`,
+    # even when plenty of RAM is actually free. Found on an a100-large Hugging
+    # Face Job (12 vCPU, 142GB RAM) with the default num_workers=4. Pinning a
+    # small fixed thread count avoids the combinatorial blowup.
+    stream.thread_type = "SLICE"
+    stream.codec_context.thread_count = 2
     time_base = float(stream.time_base)
 
     # access closest key frame of the first requested frame
