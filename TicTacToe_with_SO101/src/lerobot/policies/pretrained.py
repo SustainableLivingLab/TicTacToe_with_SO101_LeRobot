@@ -192,7 +192,14 @@ class PreTrainedPolicy(nn.Module, HubMixin, abc.ABC):
     def push_model_to_hub(
         self,
         cfg: TrainPipelineConfig,
+        step: int | None = None,
     ):
+        """Push the current model weights to the Hub.
+
+        If `step` is given, also push to a dedicated `step_<N>` branch so earlier
+        checkpoints stay recoverable on the Hub, in addition to updating `main`
+        (the branch loaders default to) with the same, latest weights.
+        """
         api = HfApi()
         repo_id = api.create_repo(
             repo_id=self.config.repo_id, private=self.config.private, exist_ok=True
@@ -211,16 +218,36 @@ class PreTrainedPolicy(nn.Module, HubMixin, abc.ABC):
 
             cfg.save_pretrained(saved_path)  # Calls _save_pretrained and stores train config
 
+            commit_message = (
+                f"Upload policy weights, train config and readme (step {step})"
+                if step is not None
+                else "Upload policy weights, train config and readme"
+            )
+
             commit_info = api.upload_folder(
                 repo_id=repo_id,
                 repo_type="model",
                 folder_path=saved_path,
-                commit_message="Upload policy weights, train config and readme",
+                commit_message=commit_message,
                 allow_patterns=["*.safetensors", "*.json", "*.yaml", "*.md"],
                 ignore_patterns=["*.tmp", "*.log"],
             )
 
             logging.info(f"Model pushed to {commit_info.repo_url.url}")
+
+            if step is not None:
+                branch_name = f"step_{step}"
+                api.create_branch(repo_id=repo_id, repo_type="model", branch=branch_name, exist_ok=True)
+                branch_commit_info = api.upload_folder(
+                    repo_id=repo_id,
+                    repo_type="model",
+                    folder_path=saved_path,
+                    revision=branch_name,
+                    commit_message=commit_message,
+                    allow_patterns=["*.safetensors", "*.json", "*.yaml", "*.md"],
+                    ignore_patterns=["*.tmp", "*.log"],
+                )
+                logging.info(f"Checkpoint also pushed to branch {branch_name!r}: {branch_commit_info.repo_url.url}")
 
     def generate_model_card(
         self, dataset_repo_id: str, model_type: str, license: str | None, tags: list[str] | None

@@ -244,6 +244,12 @@ def train(cfg: TrainPipelineConfig):
             update_last_checkpoint(checkpoint_dir)
             if wandb_logger:
                 wandb_logger.log_policy(checkpoint_dir)
+            if cfg.policy.push_to_hub and step != cfg.steps:
+                logging.info(f"Pushing checkpoint at step {step} to the Hub")
+                try:
+                    policy.push_model_to_hub(cfg, step=step)
+                except Exception:
+                    logging.exception(f"Failed to push checkpoint at step {step} to the Hub, continuing training")
 
         if cfg.env and is_eval_step:
             step_id = get_step_identifier(step, cfg.steps)
@@ -283,7 +289,7 @@ def train(cfg: TrainPipelineConfig):
     logging.info("End of training")
 
     if cfg.policy.push_to_hub:
-        policy.push_model_to_hub(cfg)
+        policy.push_model_to_hub(cfg, step=step)
 
 
 if __name__ == "__main__":
