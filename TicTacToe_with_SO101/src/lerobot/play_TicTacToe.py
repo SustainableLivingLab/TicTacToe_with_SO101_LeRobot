@@ -13,9 +13,19 @@ from lerobot.datasets.utils import (
     hw_to_dataset_features,
     DEFAULT_FEATURES
     )
-from lerobot.robots import (
+from lerobot.cameras import (  # noqa: F401
+    CameraConfig,  # noqa: F401
+)
+from lerobot.cameras.opencv.configuration_opencv import OpenCVCameraConfig  # noqa: F401
+from lerobot.cameras.realsense.configuration_realsense import RealSenseCameraConfig  # noqa: F401
+from lerobot.robots import (  # noqa: F401
     RobotConfig,
+    bi_so100_follower,
+    hope_jr,
+    koch_follower,
     make_robot_from_config,
+    so100_follower,
+    so101_follower,
 )
 from lerobot.configs.policies import PreTrainedConfig
 from lerobot.configs import parser
