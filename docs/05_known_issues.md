@@ -2,6 +2,35 @@
 
 ## Fixed
 
+- `PreTrainedConfig.from_pretrained()`
+  (`TicTacToe_with_SO101/src/lerobot/configs/policies.py`) wrote the
+  downloaded checkpoint's config to a `tempfile.NamedTemporaryFile`, then
+  tried to reopen that same path with a plain `open()` while the original
+  file handle was still held open. Windows denies this (POSIX allows
+  reopening an already-open file; Windows does not), so loading any
+  checkpoint via `--policy.path=` on Windows crashed with
+  `PermissionError: [Errno 13] Permission denied: '<temp file path>'`,
+  before the policy even finished loading. This affects every inference
+  command (`play_TicTacToe.py`) and any script calling `make_policy()` with
+  a Hub or local checkpoint path on Windows. Fixed by creating the temp
+  file with `delete=False` and explicitly closing and deleting it after use
+  instead of relying on the `with` block's own (too-early) cleanup.
+- A local inference/training venv built from `pip install -e .` on a
+  machine with an actual NVIDIA GPU can still end up with a CPU-only
+  `torch` build (`torch==X.Y.Z+cpu`), if `torch` happened to resolve from a
+  cached or previously-installed wheel instead of a CUDA build.
+  `torch.cuda.is_available()` returns `False` and `play_TicTacToe.py`/any
+  policy-loading script silently falls back to CPU (`WARNING:root:No
+  accelerated backend detected`), which is correct behavior but much
+  slower than necessary when a GPU is actually present. Check with
+  `python -c "import torch; print(torch.cuda.is_available())"` once after
+  any environment setup; if `False` on a GPU machine, reinstall explicitly
+  from the matching CUDA wheel index, e.g.
+  `pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124 --force-reinstall --no-deps`
+  (match the index's CUDA version to what `nvidia-smi` reports support
+  for; `torchvision` must be reinstalled from the same index too, since a
+  CPU/CUDA `torch` and `torchvision` mismatch fails at import time with
+  `RuntimeError: operator torchvision::nms does not exist`).
 - `decode_video_frames_torchvision()`
   (`TicTacToe_with_SO101/src/lerobot/datasets/video_utils.py`) called
   `torchvision.io.VideoReader`, which was removed entirely in newer

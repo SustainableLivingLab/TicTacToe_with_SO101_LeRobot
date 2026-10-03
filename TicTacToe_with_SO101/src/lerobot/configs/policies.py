@@ -196,11 +196,15 @@ class PreTrainedConfig(draccus.ChoiceRegistry, HubMixin, abc.ABC):
             config = json.load(f)
 
         config.pop("type")
-        with tempfile.NamedTemporaryFile("w+") as f:
+        # delete=False + explicit close before reopening: Windows denies a second
+        # open() on a file still held open by NamedTemporaryFile's own handle.
+        with tempfile.NamedTemporaryFile("w+", delete=False) as f:
             json.dump(config, f)
             config_file = f.name
-            f.flush()
 
+        try:
             cli_overrides = policy_kwargs.pop("cli_overrides", [])
             with draccus.config_type("json"):
                 return draccus.parse(orig_config.__class__, config_file, args=cli_overrides)
+        finally:
+            os.unlink(config_file)
