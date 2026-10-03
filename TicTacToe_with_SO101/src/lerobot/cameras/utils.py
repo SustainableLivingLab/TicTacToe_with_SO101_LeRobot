@@ -57,7 +57,22 @@ def get_cv2_rotation(rotation: Cv2Rotation) -> int | None:
 
 
 def get_cv2_backend() -> int:
+    import os
+
     import cv2
+
+    # Some Windows machines fail to open certain USB webcams via CAP_MSMF
+    # (ConnectionError: Failed to open OpenCVCamera(N)) despite the camera
+    # working fine elsewhere (e.g. find_cameras.py, which uses OpenCV's own
+    # default backend selection). CAP_DSHOW is a known-working fallback for
+    # this case. Override via CV2_CAPTURE_BACKEND=DSHOW in .env if MSMF
+    # fails to connect on your machine.
+    override = os.environ.get("CV2_CAPTURE_BACKEND", "").upper()
+    if override:
+        backend = getattr(cv2, f"CAP_{override}", None)
+        if backend is None:
+            raise ValueError(f"Unknown CV2_CAPTURE_BACKEND={override!r}; expected a cv2.CAP_* name, e.g. DSHOW.")
+        return backend
 
     if platform.system() == "Windows":
         return cv2.CAP_MSMF  # Use MSMF for Windows instead of AVFOUNDATION
