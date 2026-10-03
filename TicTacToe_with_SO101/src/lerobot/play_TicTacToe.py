@@ -3,6 +3,7 @@ from PIL import Image
 import numpy as np
 import io
 import os
+import random
 import time
 from google import genai
 from google.genai import types
@@ -418,7 +419,7 @@ def minimax(board,player):
     return value
 
 def CompTurn(board):
-    pos=-1
+    best_positions = []
     value=-2
     for i in range(0,9):
         if(board[i]==0):
@@ -427,8 +428,11 @@ def CompTurn(board):
             board[i]=0
             if(score>value):
                 value=score
-                pos=i
- 
+                best_positions=[i]
+            elif(score==value):
+                best_positions.append(i)
+
+    pos = random.choice(best_positions)
     return pos + 1 # change to 1 indexing
 
 def print_board(vector):
