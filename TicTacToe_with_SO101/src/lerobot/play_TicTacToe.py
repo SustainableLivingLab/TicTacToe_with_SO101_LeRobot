@@ -143,6 +143,15 @@ def call_policy(cfg: TicTacToeConfig, instruction: str):
     """Execute policy with proper resource management."""
     with robot_context(cfg) as (robot, events):
 
+        if not check_pickup_zone_has_piece(robot):
+            print("No piece detected in the pickup zone. Waiting for it to be refilled.")
+            log_say("Please refill the pickup spot", cfg.play_sounds)
+            while not check_pickup_zone_has_piece(robot):
+                if events["exit_early"]:
+                    events["exit_early"] = False
+                    return
+                busy_wait(2)
+
         policy = make_policy(cfg.policy, ds_meta=cfg.metadata)
 
         matches = re.findall(r'Place at position \d+', instruction, re.IGNORECASE)
@@ -155,9 +164,23 @@ def call_policy(cfg: TicTacToeConfig, instruction: str):
         if policy is not None:
             policy.reset()
 
+        # Settling check: once the policy's predicted action stops changing
+        # meaningfully between consecutive steps, the trained trajectory has
+        # finished and it is just holding the final pose. There is no true
+        # completion signal (no force sensor, no vision check, ACT does not
+        # predict a stop token), so this is a heuristic, not a guarantee.
+        # min_settle_check_s gives the arm time to actually start moving
+        # before the check can trigger, so an initially-still pose at the
+        # start of the turn is never mistaken for "done".
+        settle_tolerance = 1.0  # degrees/units, per joint, between consecutive actions
+        settle_frames_required = 10  # consecutive stable frames before declaring done
+        min_settle_check_s = 3.0
+        stable_frame_count = 0
+        previous_action = None
+
         timestamp = 0
         start_episode_t = time.perf_counter()
-        
+
         while timestamp < cfg.robot_turn_time_s:
             start_loop_t = time.perf_counter()
 
@@ -179,6 +202,17 @@ def call_policy(cfg: TicTacToeConfig, instruction: str):
                 )
                 action = {key: action_values[i].item() for i, key in enumerate(robot.action_features)}
                 robot.send_action(action)
+
+                if timestamp >= min_settle_check_s:
+                    if previous_action is not None and all(
+                        abs(action[k] - previous_action[k]) < settle_tolerance for k in action
+                    ):
+                        stable_frame_count += 1
+                        if stable_frame_count >= settle_frames_required:
+                            break
+                    else:
+                        stable_frame_count = 0
+                previous_action = action
 
             dt_s = time.perf_counter() - start_loop_t
             busy_wait(1 / cfg.fps - dt_s)
@@ -346,8 +380,49 @@ def get_LLM_output(image: Image.Image) -> str:
     output_string = response.text
 
     # print(output_string)
-    
+
     return output_string
+
+def check_pickup_zone_has_piece(robot) -> bool:
+    """Ask Gemini whether a loose piece is visible and ready to be picked up,
+    using the already-connected robot's own front camera (the same frame the
+    ACT policy itself observes). No hardcoded crop or camera index: this
+    reuses robot.get_observation(), so it stays correct even if the camera
+    is repositioned, unlike the fixed-crop board-reading pipeline."""
+    observation = robot.get_observation()
+    frame = observation.get("front")
+    if frame is None:
+        print("No 'front' camera observation available; treating pickup zone as empty.")
+        return False  # fail closed: never start the robot's turn on missing/uncertain data
+
+    image = Image.fromarray(frame)
+
+    prompt = f""""
+            This image is a live camera frame from a robot arm's workspace,
+            used to play a tile-placing game. There is a fixed pickup spot
+            somewhere in this frame where a single loose {O_COLOR} game piece
+            is placed before each of the robot's turns, for the robot to
+            grab and move onto a board.
+
+            Look carefully at the full image and decide: is there currently
+            a loose, ungrasped {O_COLOR} piece sitting in that pickup spot,
+            fully visible and ready for the robot's gripper to pick up right
+            now?
+
+            Answer NO if: the pickup spot is empty, you cannot clearly see
+            the pickup spot, the piece is already inside the robot's gripper
+            or being held/moved, you only see pieces already placed on the
+            board, or you are not confident a loose piece is there.
+
+            Answer YES only if you can clearly see one loose {O_COLOR} piece
+            sitting by itself, not touching the gripper, at the pickup spot.
+
+            Respond with exactly one word: YES or NO. No other text.
+            """
+
+    response = process_images_with_LLM(image, prompt)
+    answer = (response.text or "").strip().upper()
+    return answer.startswith("YES")
 
 def parse_board_state(board_string):
     """
