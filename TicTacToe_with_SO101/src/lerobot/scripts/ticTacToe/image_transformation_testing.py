@@ -41,7 +41,7 @@ def process_images_with_LLM(image: Image.Image, prompt: str) -> Optional[str]:
     contents.append(prompt)
     
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-3.8-flash",
         contents=contents,
         config={
             "temperature": 0.0

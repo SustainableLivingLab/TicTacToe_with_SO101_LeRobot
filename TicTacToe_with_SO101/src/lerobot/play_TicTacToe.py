@@ -19,6 +19,7 @@ from lerobot.cameras import (  # noqa: F401
 )
 from lerobot.cameras.opencv.configuration_opencv import OpenCVCameraConfig  # noqa: F401
 from lerobot.cameras.realsense.configuration_realsense import RealSenseCameraConfig  # noqa: F401
+import lerobot.cameras.opencv.configuration_opencv  # noqa: F401
 from lerobot.robots import (  # noqa: F401
     RobotConfig,
     bi_so100_follower,
@@ -28,6 +29,7 @@ from lerobot.robots import (  # noqa: F401
     so100_follower,
     so101_follower,
 )
+import lerobot.robots.so101_follower.config_so101_follower  # noqa: F401
 from lerobot.configs.policies import PreTrainedConfig
 from lerobot.configs import parser
 from lerobot.policies.factory import make_policy
@@ -303,7 +305,7 @@ def process_images_with_LLM(image: Image.Image, prompt: str) -> Optional[str]:
     contents.append(prompt)
     
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-3.8-flash",
         contents=contents,
         config={
             "temperature": 0.0
