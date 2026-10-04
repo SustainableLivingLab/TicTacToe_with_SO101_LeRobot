@@ -139,8 +139,14 @@ def create_mock_metadata(robot, use_videos: bool = True) -> MockDatasetMetadata:
     
     return MockDatasetMetadata(features, stats)
 
-def call_policy(cfg: TicTacToeConfig, instruction: str):
-    """Execute policy with proper resource management."""
+def call_policy(cfg: TicTacToeConfig, instruction: str, policy=None):
+    """Execute policy with proper resource management.
+
+    `policy` is loaded once in play() and passed in on every turn, rather
+    than reloaded here each call, since make_policy() re-downloading and
+    rebuilding the checkpoint added avoidable delay to every single robot
+    turn. Falls back to loading it locally if not given, so this function
+    still works standalone."""
     with robot_context(cfg) as (robot, events):
 
         if not check_pickup_zone_has_piece(robot):
@@ -152,7 +158,8 @@ def call_policy(cfg: TicTacToeConfig, instruction: str):
                     return
                 busy_wait(2)
 
-        policy = make_policy(cfg.policy, ds_meta=cfg.metadata)
+        if policy is None:
+            policy = make_policy(cfg.policy, ds_meta=cfg.metadata)
 
         matches = re.findall(r'Place at position \d+', instruction, re.IGNORECASE)
         if not matches:
@@ -546,6 +553,10 @@ def print_board(vector):
 @parser.wrap()
 def play(cfg: TicTacToeConfig) -> None:
     """Main game loop."""
+    print("Loading policy checkpoint...")
+    policy = make_policy(cfg.policy, ds_meta=cfg.metadata)
+    print("Policy loaded.")
+
     i=0
     while True:
 
@@ -577,27 +588,27 @@ def play(cfg: TicTacToeConfig) -> None:
             log_say(f"Invalid Board State", cfg.play_sounds)
             break
 
-        if analyzeboard(board_state)==0:
-            comp_position = CompTurn(board_state)
-            output = f"Place at Position {comp_position}"
-        else:
-            output = "Game Over"
-        
-        if "Game Over" in output:
-            print("Game Over")
-            log_say(f"Gave Over", cfg.play_sounds)
+        winner = analyzeboard(board_state)
+        board_full = all(cell != 0 for cell in board_state)
+
+        if winner != 0 or board_full:
+            if winner == 1:
+                print("Game Over: Robot (O) wins!")
+                log_say("Game over, I win", cfg.play_sounds)
+            elif winner == -1:
+                print("Game Over: You (X) win!")
+                log_say("Game over, you win", cfg.play_sounds)
+            else:
+                print("Game Over: Draw.")
+                log_say("Game over, it's a draw", cfg.play_sounds)
             break
 
-        if "place at position" not in output.lower():
-            print(f"Position not specified. Output: {output}")
-            log_say(f"Game Ended Unexpectedly", cfg.play_sounds)
-            break
+        comp_position = CompTurn(board_state)
+        output = f"Place at Position {comp_position}"
 
-
-        
         print(f"Decision: {output}")
         log_say(f"Placing at position {comp_position}", cfg.play_sounds)
-        call_policy(cfg, instruction=output)
+        call_policy(cfg, instruction=output, policy=policy)
         
         i+=1
 
