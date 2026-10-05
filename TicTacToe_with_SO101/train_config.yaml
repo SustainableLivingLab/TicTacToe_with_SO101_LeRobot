@@ -1,5 +1,5 @@
 dataset:
-  repo_id: IndiaTechTeamSL2/tictactoe-ai4y-v2_1
+  repo_id: IndiaTechTeamSL2/tictactoe-r2-v2_1
   video_backend: pyav
 policy:
   type: act_lang
@@ -7,7 +7,7 @@ policy:
   push_to_hub: true
   repo_id: IndiaTechTeamSL2/tictactoe-act-lang
 batch_size: 64
-steps: 25000
+steps: 7000
 save_freq: 2000
 output_dir: outputs/train/tictactoe_act_lang
 job_name: tictactoe_act_lang
