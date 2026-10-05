@@ -7,7 +7,7 @@ policy:
   push_to_hub: true
   repo_id: IndiaTechTeamSL2/tictactoe-act-lang
 batch_size: 64
-steps: 7000
+steps: 25000
 save_freq: 2000
 output_dir: outputs/train/tictactoe_act_lang
 job_name: tictactoe_act_lang
