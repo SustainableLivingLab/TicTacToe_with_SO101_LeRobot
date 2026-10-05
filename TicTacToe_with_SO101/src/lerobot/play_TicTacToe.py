@@ -365,6 +365,8 @@ def get_LLM_output(image: Image.Image) -> str:
     """Get LLM decision for next move."""
     prompt = f""""
             The attached images show a 3x3 grid board used for playing the game with tokens.
+            The image is the whole camera view, so it also shows the table and other objects;
+            read only the 3x3 grid board.
 
             The board orientation is as follows:
 
@@ -438,6 +440,15 @@ def check_pickup_zone_has_piece(robot) -> bool:
     print(f"Pickup-zone check, Gemini says: {answer[:40]!r}")
     return answer.startswith("YES")
 
+class BoardReadError(ValueError):
+    """Gemini's board reply could not be fully understood; `partial` holds
+    what was understood (None for positions that were missing/ambiguous)."""
+
+    def __init__(self, message, partial):
+        super().__init__(message)
+        self.partial = partial
+
+
 def parse_board_state(board_string):
     """
     Parse Gemini's board description into a vector of size 9.
@@ -475,9 +486,10 @@ def parse_board_state(board_string):
 
     missing = [i + 1 for i, v in enumerate(vector) if v is None]
     if missing or problems:
-        raise ValueError(
+        raise BoardReadError(
             f"Could not read the whole board (missing positions: {missing}; issues: {problems}). "
-            f"Expected each line as 'Position N: Empty/{X_COLOR}/{O_COLOR}'."
+            f"Expected each line as 'Position N: Empty/{X_COLOR}/{O_COLOR}'.",
+            vector,
         )
     return vector
 
@@ -539,13 +551,15 @@ def print_board(vector):
     """
     # Convert vector values to board symbols
     symbols = []
-    for val in vector:
+    for index, val in enumerate(vector):
         if val == -1:
             symbols.append("X")
         elif val == 1:
             symbols.append("O")
+        elif val is None:
+            symbols.append("?")
         else:
-            symbols.append(" ")
+            symbols.append(str(index + 1))  # empty: show its position number
     
     # Create the board layout
     board = f"""
@@ -590,11 +604,8 @@ def play(cfg: TicTacToeConfig) -> None:
             busy_wait(1)
             continue
         camera_failures = 0
-        image = crop_image(image, left_pct = 0.25, right_pct = 0.61 , top_pct = 0.82, bottom_pct = 1.0)
-        four_points = [(9, 76), (214, 79), (205, 7), (59, 7)]
-        image=transform_to_top_view(image, four_points, output_size=[400,400])
-        image = crop_image(image, left_pct = 0.05, right_pct = 0.95 , top_pct = 0.03, bottom_pct = 0.95)
-        image = image.rotate(180)
+        # Send Gemini the whole camera view (640x480), uncropped and unwarped.
+        # The old fixed crop/perspective points only matched one camera position.
         image.show()
         llm_output = get_LLM_output(image = image)
 
@@ -610,8 +621,10 @@ def play(cfg: TicTacToeConfig) -> None:
 
         try:
             board_state = parse_board_state(llm_output)
-        except ValueError as e:
+        except BoardReadError as e:
             board_read_failures += 1
+            print("Partial reading (? = could not tell; digits = empty cell, its position number):")
+            print_board(e.partial)
             print(f"Board reading problem ({board_read_failures}/3): {e}")
             log_say("I could not read the board", cfg.play_sounds)
             if board_read_failures >= 3:
@@ -620,6 +633,7 @@ def play(cfg: TicTacToeConfig) -> None:
             continue
         board_read_failures = 0
 
+        print(f"Board as Gemini reads it  (X = {X_COLOR}, the human; O = {O_COLOR}, the robot; digits = empty cell numbers):")
         print_board(board_state)
 
         if sum(board_state) > 1 or sum(board_state) < -1:
