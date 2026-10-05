@@ -81,6 +81,10 @@ class TicTacToeConfig:
     robot_turn_time_s: int | float = 30
     # Number of seconds for the human player to play their turn
     player_turn_time_s: int | float = 10
+    # OpenCV index of the separate camera Gemini reads the board from (not the
+    # robot's front/top cameras). Camera numbers can change after replugging;
+    # check with `python -m lerobot.find_cameras opencv`.
+    board_camera_index: int = 2
     # Encode frames in the dataset into video
     use_videos: bool = True
     policy: PreTrainedConfig | None = None
@@ -245,6 +249,8 @@ def get_grid_image(camera_index: int) -> Optional[Image.Image]:
     """Capture image from the camera."""
 
     cap = cv2.VideoCapture(camera_index)
+    if not cap.isOpened():
+        print(f"Could not open board camera at index {camera_index} (in use by another app, or the index changed).")
     try:
         cap.set(3, 640)
         cap.set(4, 480)
@@ -429,48 +435,50 @@ def check_pickup_zone_has_piece(robot) -> bool:
 
     response = process_images_with_LLM(image, prompt)
     answer = (response.text or "").strip().upper()
+    print(f"Pickup-zone check, Gemini says: {answer[:40]!r}")
     return answer.startswith("YES")
 
 def parse_board_state(board_string):
     """
-    Parse a board state string and return a vector of size 9.
-    
-    Args:
-        board_string (str): String containing position information
-        
+    Parse Gemini's board description into a vector of size 9.
+
     Returns:
         list: Vector where -1 = X_COLOR, 1 = O_COLOR, 0 = Empty
               (X_COLOR/O_COLOR set via env vars, default Blue/Red)
+
+    Raises:
+        ValueError: if any of the 9 positions is missing or its state is not
+        exactly one of empty / X_COLOR / O_COLOR. An unrecognised cell used to
+        be silently read as empty, which made the robot choose cells that
+        already held a piece; refusing to guess is safer.
     """
-    # Initialize vector with zeros
-    vector = [0] * 9
+    x_word = X_COLOR.strip().lower()
+    o_word = O_COLOR.strip().lower()
+    vector = [None] * 9
+    problems = []
 
-    # Split the string into lines and process each line
-    lines = board_string.strip().split('\n')
+    for raw_line in board_string.splitlines():
+        line = raw_line.replace("*", " ").replace("`", " ").strip(" -	")
+        m = re.search(r"position\s*(\d)\s*[:=\-]\s*(.+)", line, re.IGNORECASE)
+        if not m:
+            continue
+        index = int(m.group(1)) - 1
+        if not 0 <= index <= 8:
+            problems.append(f"position out of range: {raw_line.strip()!r}")
+            continue
+        words = set(re.findall(r"[a-z]+", m.group(2).lower()))
+        matches = [value for word, value in (("empty", 0), (x_word, -1), (o_word, 1)) if word in words]
+        if len(matches) != 1:
+            problems.append(f"cannot tell the state of position {index + 1}: {raw_line.strip()!r}")
+            continue
+        vector[index] = matches[0]
 
-    for line in lines:
-        line = line.strip()
-        if line.startswith('Position'):
-            # Extract position number and state
-            parts = line.split(':')
-            if len(parts) == 2:
-                position_part = parts[0].strip()
-                state_part = parts[1].strip()
-
-                # Extract position number
-                position_num = int(position_part.split()[-1])
-
-                # Convert to 0-indexed
-                index = position_num - 1
-
-                # Set value based on state
-                if state_part.lower() == X_COLOR.lower():
-                    vector[index] = -1
-                elif state_part.lower() == O_COLOR.lower():
-                    vector[index] = 1
-                elif state_part.lower() == 'empty':
-                    vector[index] = 0
-
+    missing = [i + 1 for i, v in enumerate(vector) if v is None]
+    if missing or problems:
+        raise ValueError(
+            f"Could not read the whole board (missing positions: {missing}; issues: {problems}). "
+            f"Expected each line as 'Position N: Empty/{X_COLOR}/{O_COLOR}'."
+        )
     return vector
 
 def analyzeboard(board):
@@ -558,6 +566,8 @@ def play(cfg: TicTacToeConfig) -> None:
     print("Policy loaded.")
 
     i=0
+    camera_failures = 0
+    board_read_failures = 0
     while True:
 
         if i!=0:
@@ -565,12 +575,21 @@ def play(cfg: TicTacToeConfig) -> None:
             # Wait for Human to play
             busy_wait(cfg.player_turn_time_s)
 
-        camera_index = 2
-        image = get_grid_image(camera_index = camera_index)
+        image = get_grid_image(camera_index = cfg.board_camera_index)
         if image is None:
-            print("Camera capture failed, retrying.")
+            camera_failures += 1
+            print(
+                f"Board camera capture failed (index {cfg.board_camera_index}), attempt {camera_failures}/10. "
+                "Close any other app using the camera, and run `python -m lerobot.find_cameras opencv` "
+                "to check which index is the board camera, then pass --board_camera_index=<n>."
+            )
             log_say("Camera capture failed", cfg.play_sounds)
+            if camera_failures >= 10:
+                print("Giving up after 10 failed board camera captures.")
+                break
+            busy_wait(1)
             continue
+        camera_failures = 0
         image = crop_image(image, left_pct = 0.25, right_pct = 0.61 , top_pct = 0.82, bottom_pct = 1.0)
         four_points = [(9, 76), (214, 79), (205, 7), (59, 7)]
         image=transform_to_top_view(image, four_points, output_size=[400,400])
@@ -578,9 +597,29 @@ def play(cfg: TicTacToeConfig) -> None:
         image = image.rotate(180)
         image.show()
         llm_output = get_LLM_output(image = image)
-        board_state = parse_board_state(llm_output)
 
-        # print(board_state)
+        # Keep what the board camera saw and what Gemini answered, so a wrong
+        # reading can be diagnosed afterwards instead of guessed at.
+        debug_dir = Path("board_debug")
+        debug_dir.mkdir(exist_ok=True)
+        image.save(debug_dir / f"board_turn_{i}.jpg")
+        (debug_dir / f"board_turn_{i}.txt").write_text(llm_output, encoding="utf-8")
+        print("--- Gemini's board reading ---")
+        print(llm_output.strip())
+        print("------------------------------")
+
+        try:
+            board_state = parse_board_state(llm_output)
+        except ValueError as e:
+            board_read_failures += 1
+            print(f"Board reading problem ({board_read_failures}/3): {e}")
+            log_say("I could not read the board", cfg.play_sounds)
+            if board_read_failures >= 3:
+                print("Giving up after 3 unreadable board readings.")
+                break
+            continue
+        board_read_failures = 0
+
         print_board(board_state)
 
         if sum(board_state) > 1 or sum(board_state) < -1:
